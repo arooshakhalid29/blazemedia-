@@ -1,0 +1,270 @@
+{
+  "entities": {
+    "MediaAsset": {
+      "title": "MediaAsset",
+      "description": "An outdoor media inventory asset such as a billboard, DOOH screen, unipole, or bridge panel in Pakistan.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the media asset",
+          "maxLength": 128
+        },
+        "code": {
+          "type": "string",
+          "description": "Human-readable inventory site code (e.g. KHI-UNP-0101)",
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "description": "Descriptive title of the outdoor media site",
+          "maxLength": 256
+        },
+        "vendor": {
+          "type": "string",
+          "description": "Concessionaire or vendor name",
+          "maxLength": 128
+        },
+        "city": {
+          "type": "string",
+          "description": "City where the site is located",
+          "maxLength": 64
+        },
+        "area": {
+          "type": "string",
+          "description": "Location area or street landmark",
+          "maxLength": 256
+        },
+        "zone": {
+          "type": "string",
+          "description": "Commercial zone or municipal corridor",
+          "maxLength": 128
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of media structure",
+          "enum": [
+            "Billboard",
+            "Digital Screen",
+            "Unipole",
+            "Digital SMD Screen",
+            "Bridge Panel",
+            "Gantry",
+            "Cantilever",
+            "Building Wrap",
+            "Metro Bus Shelter"
+          ]
+        },
+        "dimensions": {
+          "type": "object",
+          "description": "Physical dimensions of the display"
+        },
+        "orientation": {
+          "type": "string",
+          "description": "Display orientation",
+          "enum": ["Landscape", "Portrait", "Curved"]
+        },
+        "sides": {
+          "type": "number",
+          "description": "Number of active advertising display faces"
+        },
+        "illumination": {
+          "type": "string",
+          "description": "Lighting technology",
+          "enum": ["Digital SMD", "Frontlit", "Backlit", "Non-lit"]
+        },
+        "cost": {
+          "type": "object",
+          "description": "Commercial rate card and production costs in PKR"
+        },
+        "profiling": {
+          "type": "object",
+          "description": "Traffic volume, SEC rating, and audience metrics"
+        },
+        "coordinates": {
+          "type": "object",
+          "description": "Geographic GPS coordinates"
+        },
+        "authorityNoc": {
+          "type": "string",
+          "description": "Municipal or cantonment regulatory authority NOC",
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "description": "Current availability status",
+          "enum": ["Available", "Occupied", "Reserved", "Maintenance"]
+        },
+        "currentBrandOccupant": {
+          "type": "string",
+          "description": "Current commercial brand occupant if occupied",
+          "maxLength": 256
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Primary day photo URL or compressed asset preview",
+          "maxLength": 2097152
+        },
+        "nightImageUrl": {
+          "type": "string",
+          "description": "Night illumination photo URL",
+          "maxLength": 2097152
+        },
+        "galleryImages": {
+          "type": "array",
+          "description": "Additional photo angles and sightline previews"
+        },
+        "techSpecs": {
+          "type": "object",
+          "description": "Structural engineering and backup power specs"
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "User ID of administrator who last updated the asset",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["id", "code", "title", "city", "area", "type", "cost", "status"]
+    },
+    "BookingRequest": {
+      "title": "BookingRequest",
+      "description": "Site reservation request submitted by advertiser clients.",
+      "type": "object",
+      "properties": {
+        "bookingId": {
+          "type": "string",
+          "description": "Unique booking reference ID (e.g. BK-BLZ-782104)",
+          "maxLength": 64
+        },
+        "clientName": {
+          "type": "string",
+          "description": "Client planner or executive name",
+          "maxLength": 128
+        },
+        "organization": {
+          "type": "string",
+          "description": "Client brand or media agency company",
+          "maxLength": 128
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "Client contact email",
+          "maxLength": 128
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number",
+          "maxLength": 64
+        },
+        "assetId": {
+          "type": "string",
+          "description": "Referenced media asset ID",
+          "maxLength": 128
+        },
+        "assetCode": {
+          "type": "string",
+          "description": "Referenced media asset code",
+          "maxLength": 64
+        },
+        "brandName": {
+          "type": "string",
+          "description": "Campaign brand or product title",
+          "maxLength": 256
+        },
+        "durationMonths": {
+          "type": "number",
+          "description": "Campaign duration in months"
+        },
+        "startDate": {
+          "type": "string",
+          "description": "Proposed campaign activation date",
+          "maxLength": 32
+        },
+        "notes": {
+          "type": "string",
+          "description": "Special instructions or illumination check requests",
+          "maxLength": 1024
+        },
+        "submittedAt": {
+          "type": "string",
+          "description": "Submission ISO timestamp",
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "description": "Reservation processing status",
+          "enum": ["Pending Admin Confirmation", "Approved & Reserved", "Rejected"]
+        },
+        "quotedAmountPkr": {
+          "type": "number",
+          "description": "Estimated campaign gross investment"
+        },
+        "clientUid": {
+          "type": "string",
+          "description": "Authenticated client UID",
+          "maxLength": 128
+        }
+      },
+      "required": ["bookingId", "assetId", "assetCode", "brandName", "durationMonths", "status"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Designated system administrators with write privileges.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "addedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["email", "role"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile with role and organization information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "organization": { "type": "string", "maxLength": 128 },
+        "designation": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["client", "administrator"], "maxLength": 32 },
+        "status": { "type": "string", "enum": ["Active", "Suspended"], "maxLength": 32 },
+        "requiresPasswordChange": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "email", "name", "role"]
+    }
+  },
+  "firestore": {
+    "/mediaAssets/{assetId}": {
+      "schema": { "$ref": "MediaAsset" },
+      "description": "Outdoor media assets master inventory collection."
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "BookingRequest" },
+      "description": "Campaign site reservations and booking requests."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "Admin" },
+      "description": "Designated administrator identity documents."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Registered user accounts and client profiles."
+    }
+  }
+}

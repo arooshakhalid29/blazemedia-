@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Remix Remix Remix Blaze OOH Media Asset Manager",
+  "description": "Windows-based outdoor media inventory and profiling database for billboards, DOOH screens, bridge panels, and gantries across Pakistan with advanced location, size, cost, and audience filtering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
