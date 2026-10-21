@@ -45,7 +45,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     setSuccessMsg('');
 
     try {
-      await updateClientPermanentPassword(newPassword);
+      await updateClientPermanentPassword(newPassword, currentUser.email, currentUser.id);
       setSuccessMsg('Your permanent password has been set successfully!');
 
       const updatedUser: UserAccount = {

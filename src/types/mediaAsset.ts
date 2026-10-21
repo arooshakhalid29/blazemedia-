@@ -180,6 +180,8 @@ export interface ManagedClientRecord {
   role: 'client';
   status: 'Active' | 'Suspended';
   requiresPasswordChange: boolean;
+  temporaryPassword?: string;
+  password?: string;
   permittedCities?: string[];
   createdAt: string;
   createdBy: string;

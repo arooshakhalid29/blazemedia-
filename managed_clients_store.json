@@ -1,0 +1,46 @@
+[
+  {
+    "id": "usr_client_369932",
+    "name": "Danish Ali",
+    "email": "daneshali1039@gmail.com",
+    "organization": "Freelance",
+    "designation": "freelance",
+    "role": "client",
+    "status": "Active",
+    "requiresPasswordChange": true,
+    "temporaryPassword": "clientpass2026",
+    "password": "clientpass2026",
+    "permittedCities": [
+      "Karachi",
+      "Lahore",
+      "Islamabad",
+      "Rawalpindi",
+      "Faisalabad",
+      "Multan",
+      "Peshawar",
+      "Quetta",
+      "Sialkot",
+      "Gujranwala"
+    ],
+    "createdAt": "2026-10-21T07:06:10.661Z",
+    "createdBy": "admin@blaze.com.pk"
+  },
+  {
+    "id": "usr_client_847216",
+    "name": "Ayesha Malik",
+    "email": "testclient1792567847216@agency.com",
+    "organization": "Starcom Mediavest",
+    "designation": "Head of Planning",
+    "role": "client",
+    "status": "Active",
+    "requiresPasswordChange": false,
+    "temporaryPassword": "Starcom2026!Secure",
+    "password": "Starcom2026!Secure",
+    "permittedCities": [
+      "Karachi",
+      "Lahore"
+    ],
+    "createdAt": "2026-10-21T07:30:47.216Z",
+    "createdBy": "admin@blaze.com.pk"
+  }
+]

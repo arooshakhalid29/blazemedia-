@@ -76,30 +76,26 @@ export const StartingLoginWindow: React.FC<StartingLoginWindowProps> = ({
 
     const cleanEmail = signInEmail.toLowerCase().trim();
 
-    // Verify role expectation for administrator
+    // If user attempted login on Administrator tab with a non-admin email, auto-switch to Client mode
     if (selectedRole === 'administrator' && cleanEmail !== 'admin@blaze.com.pk') {
-      setErrorMessage(
-        'Access Denied: Only the official administrator account can authenticate in Administrator mode.'
-      );
-      setIsLoading(false);
-      return;
+      setSelectedRole('client');
     }
 
     try {
-      // First attempt real Firebase Authentication
+      // Authenticate via client/admin authentication service
       const account = await signInWithEmail(cleanEmail, signInPassword);
       setSuccessMessage(
         account.role === 'administrator'
           ? `Administrator authenticated: ${account.name}`
-          : `Client authenticated: ${account.name}`
+          : `Client authenticated: ${account.name} (${account.organization})`
       );
       setTimeout(() => {
         onLogin(account);
       }, 700);
-    } catch (fbErr: any) {
-      console.warn('Firebase Auth sign in notice, verifying via authentication server:', fbErr.message);
+    } catch (authErr: any) {
+      console.warn('Authentication attempt notice, checking backend server fallback:', authErr.message);
 
-      // Verify via backend server credentials API
+      // Verify via backend server credentials API fallback
       try {
         const resp = await fetch('/api/auth/login', {
           method: 'POST',
@@ -117,8 +113,8 @@ export const StartingLoginWindow: React.FC<StartingLoginWindowProps> = ({
             return;
           }
         } else {
-          const errData = await resp.json();
-          setErrorMessage(errData.error || 'Invalid email or password.');
+          const errData = await resp.json().catch(() => ({}));
+          setErrorMessage(errData.error || authErr.message || 'Invalid email or password.');
           setIsLoading(false);
           return;
         }
@@ -127,7 +123,7 @@ export const StartingLoginWindow: React.FC<StartingLoginWindowProps> = ({
       }
 
       // Check credentials for admin fallback
-      if (selectedRole === 'administrator' && cleanEmail === 'admin@blaze.com.pk') {
+      if (cleanEmail === 'admin@blaze.com.pk') {
         if (signInPassword === 'blaze@admin2026') {
           setSuccessMessage('Administrator session activated for Engr. Tariq Latif.');
           setTimeout(() => {
@@ -141,7 +137,9 @@ export const StartingLoginWindow: React.FC<StartingLoginWindowProps> = ({
         }
       }
 
-      setErrorMessage('Invalid email or password. Please verify your credentials or register an account.');
+      setErrorMessage(
+        authErr.message || 'Invalid email or password. Please verify your credentials or contact administrator.'
+      );
     } finally {
       setIsLoading(false);
     }

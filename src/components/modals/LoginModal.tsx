@@ -91,11 +91,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     const cleanEmail = email.toLowerCase().trim();
 
     if (activeTab === 'administrator' && cleanEmail !== 'admin@blaze.com.pk') {
-      setAuthError(
-        'Access Denied: Only authorized administrator account can authenticate in Administrator mode.'
-      );
-      setIsLoading(false);
-      return;
+      setActiveTab('client');
     }
 
     try {
@@ -104,15 +100,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       setAuthSuccess(
         account.role === 'administrator'
           ? `Administrator authenticated: ${account.name}`
-          : `Client authenticated: ${account.name}`
+          : `Client authenticated: ${account.name} (${account.organization})`
       );
       setTimeout(() => {
         onClose();
       }, 700);
     } catch (err: any) {
-      console.warn('Firebase email sign-in notice, verifying credentials:', err.message);
+      console.warn('Sign-in attempt notice, verifying credentials with backend fallback:', err.message);
 
-      // Verify via backend server credentials API
+      // Verify via backend server credentials API fallback
       try {
         const resp = await fetch('/api/auth/login', {
           method: 'POST',
@@ -131,8 +127,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             return;
           }
         } else {
-          const errData = await resp.json();
-          setAuthError(errData.error || 'Invalid email or password.');
+          const errData = await resp.json().catch(() => ({}));
+          setAuthError(errData.error || err.message || 'Invalid email or password.');
           setIsLoading(false);
           return;
         }
@@ -141,7 +137,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       }
 
       // Check credentials for admin fallback
-      if (activeTab === 'administrator' && cleanEmail === 'admin@blaze.com.pk') {
+      if (cleanEmail === 'admin@blaze.com.pk') {
         if (password === 'blaze@admin2026') {
           onLogin(DEMO_USERS.administrator);
           setAuthSuccess('Administrator authenticated: Engr. Tariq Latif');
@@ -154,7 +150,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         }
       }
 
-      setAuthError('Invalid credentials. Please verify your email and password.');
+      setAuthError(err.message || 'Invalid credentials. Please verify your email and password.');
     } finally {
       setIsLoading(false);
     }

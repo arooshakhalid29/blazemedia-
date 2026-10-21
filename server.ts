@@ -3,6 +3,20 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import * as XLSX from 'xlsx';
+import { initializeApp, getApps } from 'firebase/app';
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  query,
+  where,
+} from 'firebase/firestore';
+import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
+
+const serverFirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const serverDb = getFirestore(serverFirebaseApp, firebaseConfig.firestoreDatabaseId);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -273,8 +287,75 @@ app.post('/api/assets/batch-save', (req: Request, res: Response) => {
   });
 });
 
-// Private Administrator Client Account Management Store
+// Private Administrator Client Account Management Store with disk persistence & live Firestore sync
+const CLIENTS_STORAGE_PATH = path.resolve('managed_clients_store.json');
 let managedClientStore: any[] = [];
+
+// Initialize client store from disk if present
+try {
+  if (fs.existsSync(CLIENTS_STORAGE_PATH)) {
+    const raw = fs.readFileSync(CLIENTS_STORAGE_PATH, 'utf-8');
+    managedClientStore = JSON.parse(raw);
+    console.log(`[Blaze Auth] Loaded ${managedClientStore.length} managed client account(s) from persistent store.`);
+  }
+} catch (e) {
+  console.warn('Notice reading client storage file:', e);
+}
+
+function saveClientStore() {
+  try {
+    fs.writeFileSync(CLIENTS_STORAGE_PATH, JSON.stringify(managedClientStore, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('Notice saving client storage file:', e);
+  }
+}
+
+// Background synchronization of managed clients from Firestore /users
+async function syncClientsFromFirestore() {
+  try {
+    const snap = await getDocs(collection(serverDb, 'users'));
+    if (!snap.empty) {
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        if (data.role === 'client') {
+          const cleanEmail = (data.email || '').toLowerCase().trim();
+          const existingIdx = managedClientStore.findIndex((c) => c.email === cleanEmail);
+          const record = {
+            id: d.id,
+            name: data.name || cleanEmail.split('@')[0],
+            email: cleanEmail,
+            organization: data.organization || 'Advertiser Agency Client',
+            designation: data.designation || 'Media Planning Executive',
+            role: 'client' as const,
+            status: data.status || 'Active',
+            requiresPasswordChange: data.requiresPasswordChange !== false,
+            temporaryPassword: data.temporaryPassword || data.password || '',
+            password: data.password || data.temporaryPassword || '',
+            permittedCities: Array.isArray(data.permittedCities) ? data.permittedCities : [],
+            createdAt: data.createdAt || new Date().toISOString(),
+            createdBy: data.createdBy || 'admin@blaze.com.pk',
+          };
+          if (existingIdx >= 0) {
+            managedClientStore[existingIdx] = {
+              ...record,
+              ...managedClientStore[existingIdx],
+              temporaryPassword:
+                managedClientStore[existingIdx].temporaryPassword || record.temporaryPassword,
+              password: managedClientStore[existingIdx].password || record.password,
+            };
+          } else {
+            managedClientStore.push(record);
+          }
+        }
+      });
+      saveClientStore();
+      console.log(`[Blaze Auth] Synced ${managedClientStore.length} client(s) with Firestore.`);
+    }
+  } catch (err: any) {
+    console.warn('Notice syncing clients from Firestore:', err.message);
+  }
+}
+syncClientsFromFirestore();
 
 // Helper to check admin authorization
 function verifyAdminAuthorization(req: Request): boolean {
@@ -297,13 +378,24 @@ app.post('/api/admin/clients', (req: Request, res: Response) => {
     return res.status(403).json({ error: 'Access denied: Administrator privileges required (admin@blaze.com.pk only).' });
   }
 
-  const { id, name, email, organization, designation, permittedCities, requiresPasswordChange } = req.body;
+  const {
+    id,
+    name,
+    email,
+    organization,
+    designation,
+    permittedCities,
+    requiresPasswordChange,
+    temporaryPassword,
+    password,
+  } = req.body;
 
   if (!email || !name) {
     return res.status(400).json({ error: 'Name and email are required to issue client credentials.' });
   }
 
   const cleanEmail = email.toLowerCase().trim();
+  const assignedPassword = temporaryPassword || password || '';
 
   // Check if client already exists - update if found
   const existingIndex = managedClientStore.findIndex(c => c.email === cleanEmail);
@@ -315,7 +407,16 @@ app.post('/api/admin/clients', (req: Request, res: Response) => {
       designation: designation?.trim() || managedClientStore[existingIndex].designation,
       permittedCities: Array.isArray(permittedCities) ? permittedCities : managedClientStore[existingIndex].permittedCities,
       requiresPasswordChange: requiresPasswordChange !== false,
+      ...(assignedPassword ? { temporaryPassword: assignedPassword, password: assignedPassword } : {}),
+      updatedAt: new Date().toISOString(),
     };
+    saveClientStore();
+
+    // Sync to Firestore
+    try {
+      setDoc(doc(serverDb, 'users', managedClientStore[existingIndex].id), managedClientStore[existingIndex], { merge: true }).catch(console.warn);
+    } catch {}
+
     return res.status(200).json({
       success: true,
       client: managedClientStore[existingIndex],
@@ -329,15 +430,23 @@ app.post('/api/admin/clients', (req: Request, res: Response) => {
     email: cleanEmail,
     organization: organization?.trim() || 'Advertiser Agency Client',
     designation: designation?.trim() || 'Media Planning Executive',
-    role: 'client', // Strictly enforced server-side
+    role: 'client' as const, // Strictly enforced server-side
     status: 'Active',
     requiresPasswordChange: requiresPasswordChange !== false,
+    temporaryPassword: assignedPassword,
+    password: assignedPassword,
     permittedCities: Array.isArray(permittedCities) ? permittedCities : [],
     createdAt: new Date().toISOString(),
     createdBy: 'admin@blaze.com.pk',
   };
 
   managedClientStore.unshift(newClient);
+  saveClientStore();
+
+  // Save to Firestore
+  try {
+    setDoc(doc(serverDb, 'users', newClient.id), newClient, { merge: true }).catch(console.warn);
+  } catch {}
 
   res.status(201).json({
     success: true,
@@ -363,6 +472,7 @@ app.delete('/api/admin/clients/:id', (req: Request, res: Response) => {
       c.email?.toLowerCase().trim() !== target &&
       (!emailParam || c.email?.toLowerCase().trim() !== emailParam)
   );
+  saveClientStore();
 
   res.json({ success: true, message: 'Client account deleted successfully.', remaining: managedClientStore.length });
 });
@@ -403,7 +513,7 @@ const AUTH_ACCOUNTS = {
 // Login Endpoint
 // Zero-trust Security: Only admin@blaze.com.pk can receive Administrator privileges.
 // All other users (even if requested role is administrator) receive the Client role.
-app.post('/api/auth/login', (req: Request, res: Response) => {
+app.post('/api/auth/login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const cleanEmail = (email || '').toLowerCase().trim();
 
@@ -419,33 +529,138 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     });
   }
 
-  // All other emails are strictly assigned the Client role
-  const foundClient = managedClientStore.find(c => c.email === cleanEmail);
-  const clientUser = foundClient ? {
-    id: foundClient.id,
-    email: foundClient.email,
-    name: foundClient.name,
-    role: 'client',
-    organization: foundClient.organization,
-    designation: foundClient.designation,
-    permissions: AUTH_ACCOUNTS.clientPermissions,
-    requiresPasswordChange: foundClient.requiresPasswordChange,
-  } : {
-    id: `usr_client_${Date.now().toString().slice(-6)}`,
-    email: cleanEmail || 'client@blaze.com.pk',
-    name: cleanEmail ? cleanEmail.split('@')[0] : 'Client User',
-    role: 'client',
-    organization: 'Enterprise Advertiser Agency',
-    designation: 'Media Planning Director',
-    permissions: AUTH_ACCOUNTS.clientPermissions,
-    requiresPasswordChange: false,
-  };
+  // Find client in provisioned store
+  let foundClient = managedClientStore.find(c => c.email?.toLowerCase().trim() === cleanEmail);
 
-  return res.json({
-    success: true,
-    user: clientUser,
-    message: 'Logged in successfully as Client (Proposal & Booking access).',
+  // If not found in memory store, query Firestore /users collection directly
+  if (!foundClient) {
+    try {
+      const q = query(collection(serverDb, 'users'), where('email', '==', cleanEmail));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        const data = docSnap.data() as any;
+        foundClient = {
+          id: docSnap.id,
+          name: data.name || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          organization: data.organization || 'Advertiser Agency Client',
+          designation: data.designation || 'Media Planning Executive',
+          role: 'client' as const,
+          status: data.status || 'Active',
+          requiresPasswordChange: data.requiresPasswordChange !== false,
+          temporaryPassword: data.temporaryPassword || data.password || '',
+          password: data.password || data.temporaryPassword || '',
+          permittedCities: Array.isArray(data.permittedCities) ? data.permittedCities : [],
+          createdAt: data.createdAt || new Date().toISOString(),
+          createdBy: data.createdBy || 'admin@blaze.com.pk',
+        };
+        managedClientStore.push(foundClient);
+        saveClientStore();
+      }
+    } catch (e: any) {
+      console.warn('Notice checking Firestore in login route:', e.message);
+    }
+  }
+
+  if (foundClient) {
+    const expectedPassword = foundClient.password || foundClient.temporaryPassword;
+    if (expectedPassword) {
+      if (password && password !== expectedPassword) {
+        return res.status(401).json({
+          error: 'Invalid password. Please enter the temporary password provided by your administrator.',
+        });
+      }
+    } else {
+      // First login for legacy client created without a password stored (e.g. Danish Ali)
+      foundClient.password = password;
+      foundClient.temporaryPassword = password;
+      saveClientStore();
+      try {
+        setDoc(doc(serverDb, 'users', foundClient.id), { password, temporaryPassword: password }, { merge: true }).catch(console.warn);
+      } catch {}
+    }
+
+    const clientUser = {
+      id: foundClient.id,
+      email: foundClient.email,
+      name: foundClient.name,
+      role: 'client' as const,
+      organization: foundClient.organization,
+      designation: foundClient.designation,
+      permissions: AUTH_ACCOUNTS.clientPermissions,
+      requiresPasswordChange: foundClient.requiresPasswordChange !== false,
+      permittedCities: foundClient.permittedCities || [],
+      status: foundClient.status || 'Active',
+    };
+
+    return res.json({
+      success: true,
+      user: clientUser,
+      message: `Logged in successfully as ${clientUser.name} (${clientUser.organization}).`,
+    });
+  }
+
+  return res.status(401).json({
+    error: 'No client account found for this email address. Please check your credentials or contact Blaze Media operations.',
   });
+});
+
+// Update client password endpoint
+app.post('/api/auth/update-password', async (req: Request, res: Response) => {
+  const { email, newPassword } = req.body;
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const idx = managedClientStore.findIndex(c => c.email?.toLowerCase().trim() === cleanEmail);
+  if (idx >= 0) {
+    managedClientStore[idx].password = newPassword;
+    managedClientStore[idx].temporaryPassword = newPassword;
+    managedClientStore[idx].requiresPasswordChange = false;
+    managedClientStore[idx].updatedAt = new Date().toISOString();
+    saveClientStore();
+
+    try {
+      setDoc(
+        doc(serverDb, 'users', managedClientStore[idx].id),
+        { password: newPassword, temporaryPassword: newPassword, requiresPasswordChange: false },
+        { merge: true }
+      ).catch(console.warn);
+    } catch {}
+
+    return res.json({ success: true, message: 'Password updated successfully in server store.' });
+  }
+
+  // Also try Firestore directly if not yet in server array
+  try {
+    const q = query(collection(serverDb, 'users'), where('email', '==', cleanEmail));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docSnap = snap.docs[0];
+      await setDoc(
+        docSnap.ref,
+        { password: newPassword, temporaryPassword: newPassword, requiresPasswordChange: false },
+        { merge: true }
+      );
+      return res.json({ success: true, message: 'Password updated successfully in database.' });
+    }
+  } catch {}
+
+  res.status(404).json({ error: 'Client account not found.' });
+});
+
+// Fetch client profile by email or id
+app.get('/api/auth/client-profile', (req: Request, res: Response) => {
+  const email = ((req.query.email as string) || '').toLowerCase().trim();
+  const id = (req.query.id as string) || '';
+  const found = managedClientStore.find(
+    (c) =>
+      (email && c.email?.toLowerCase().trim() === email) ||
+      (id && c.id === id)
+  );
+  if (found) {
+    const { password, temporaryPassword, ...safeProfile } = found;
+    return res.json({ success: true, client: safeProfile });
+  }
+  res.status(404).json({ error: 'Client profile not found.' });
 });
 
 // Self-Registration Endpoint for New Clients
@@ -481,6 +696,7 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
   } else {
     managedClientStore.unshift(newClient);
   }
+  saveClientStore();
 
   res.status(201).json({
     success: true,

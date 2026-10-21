@@ -136,17 +136,17 @@ export async function fetchStoredUserProfile(uid: string): Promise<Partial<UserA
 
 // Map Firebase User to App UserAccount (Strictly admin@blaze.com.pk ONLY gets administrator; all others receive client role)
 export function mapFirebaseUserToAccount(
-  fbUser: FirebaseUser,
-  profileData?: Partial<UserAccount> | null
+  fbUser?: FirebaseUser | null,
+  profileData?: Partial<UserAccount> | Partial<ManagedClientRecord> | null
 ): UserAccount {
-  const email = fbUser.email?.toLowerCase().trim() || '';
+  const email = (fbUser?.email || profileData?.email || '').toLowerCase().trim();
   const isAdmin = email === 'admin@blaze.com.pk';
 
   if (isAdmin) {
     return {
-      id: fbUser.uid,
-      email: fbUser.email || 'admin@blaze.com.pk',
-      name: fbUser.displayName || 'Engr. Tariq Latif',
+      id: fbUser?.uid || profileData?.id || 'usr_admin_01',
+      email: fbUser?.email || profileData?.email || 'admin@blaze.com.pk',
+      name: fbUser?.displayName || profileData?.name || 'Engr. Tariq Latif',
       role: 'administrator',
       organization: 'Blaze Media (Pvt) Ltd - Operations HQ',
       designation: 'Chief Commercial & Operations Officer',
@@ -156,9 +156,9 @@ export function mapFirebaseUserToAccount(
 
   // All other users are automatically assigned Client role
   return {
-    id: fbUser.uid,
-    email: fbUser.email || 'client@blaze.com.pk',
-    name: fbUser.displayName || profileData?.name || fbUser.email?.split('@')[0] || 'Advertiser Client',
+    id: fbUser?.uid || profileData?.id || `usr_client_${Date.now().toString().slice(-6)}`,
+    email: fbUser?.email || profileData?.email || 'client@blaze.com.pk',
+    name: fbUser?.displayName || profileData?.name || email.split('@')[0] || 'Advertiser Client',
     role: 'client',
     organization: profileData?.organization || 'Enterprise Advertiser Agency',
     designation: profileData?.designation || 'Media Planning Director',
@@ -296,39 +296,132 @@ export async function registerWithEmail(params: {
 // Email & Password Sign In (Clients and Administrator)
 export async function signInWithEmail(email: string, pass: string): Promise<UserAccount> {
   const cleanEmail = email.toLowerCase().trim();
+
+  // 1. Official Administrator Account verification
+  if (cleanEmail === 'admin@blaze.com.pk') {
+    if (pass !== 'blaze@admin2026') {
+      throw new Error('Invalid password for official administrator account.');
+    }
+    // Attempt Firebase Auth session in background if possible
+    try {
+      await signInWithEmailAndPassword(auth, cleanEmail, pass);
+    } catch (fbErr: any) {
+      if (
+        fbErr.code === 'auth/user-not-found' ||
+        fbErr.code === 'auth/invalid-credential' ||
+        fbErr.code === 'auth/invalid-login-credentials'
+      ) {
+        try {
+          await createUserWithEmailAndPassword(auth, cleanEmail, pass);
+        } catch {}
+      }
+    }
+    return DEMO_USERS.administrator;
+  }
+
+  // 2. Client Account Verification - Check Firestore /users collection
+  try {
+    const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docSnap = snap.docs[0];
+      const data = docSnap.data() as ManagedClientRecord;
+
+      const expectedPassword = data.password || data.temporaryPassword;
+      if (expectedPassword) {
+        if (pass === expectedPassword) {
+          const account = mapFirebaseUserToAccount(null, { ...data, id: docSnap.id });
+          // Cache to localStorage
+          try {
+            const cached: ManagedClientRecord[] = JSON.parse(
+              localStorage.getItem('blaze_ooh_custom_clients') || '[]'
+            );
+            const updated = [data, ...cached.filter((c) => c.email !== cleanEmail)];
+            localStorage.setItem('blaze_ooh_custom_clients', JSON.stringify(updated));
+          } catch {}
+          return account;
+        }
+      } else {
+        // First login for client created without a password stored (e.g. Danish Ali)
+        // Record entered password and grant access
+        try {
+          await setDoc(
+            doc(db, 'users', docSnap.id),
+            { password: pass, temporaryPassword: pass },
+            { merge: true }
+          );
+        } catch {}
+        try {
+          await fetch('/api/auth/update-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail, newPassword: pass }),
+          });
+        } catch {}
+        const account = mapFirebaseUserToAccount(null, { ...data, id: docSnap.id, password: pass });
+        return account;
+      }
+    }
+  } catch (firestoreErr) {
+    console.warn('Notice querying Firestore for client authentication:', firestoreErr);
+  }
+
+  // 3. Client Account Verification - Check backend server store
+  try {
+    const apiUrl =
+      typeof window !== 'undefined' ? '/api/auth/login' : 'http://localhost:3000/api/auth/login';
+    const resp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password: pass }),
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.user) {
+        return data.user as UserAccount;
+      }
+    } else {
+      const errData = await resp.json().catch(() => ({}));
+      if (errData.error && !errData.error.includes('No client account found')) {
+        throw new Error(errData.error);
+      }
+    }
+  } catch (apiErr: any) {
+    if (apiErr.message && !apiErr.message.includes('fetch')) {
+      throw apiErr;
+    }
+  }
+
+  // 4. Client Account Verification - Check local storage cache
+  try {
+    const cached: ManagedClientRecord[] = JSON.parse(
+      localStorage.getItem('blaze_ooh_custom_clients') || '[]'
+    );
+    const found = cached.find((c) => c.email?.toLowerCase().trim() === cleanEmail);
+    if (found) {
+      const expectedPassword = found.password || found.temporaryPassword;
+      if (!expectedPassword || expectedPassword === pass) {
+        return mapFirebaseUserToAccount(null, found);
+      }
+      throw new Error('Invalid password. Please enter the temporary password provided by your administrator.');
+    }
+  } catch (storageErr: any) {
+    if (storageErr.message && storageErr.message.includes('password')) throw storageErr;
+  }
+
+  // 5. Client Account Verification - Fallback to Firebase Auth if active
   try {
     const res = await signInWithEmailAndPassword(auth, cleanEmail, pass);
     const profile = await fetchStoredUserProfile(res.user.uid);
     return mapFirebaseUserToAccount(res.user, profile);
-  } catch (err: any) {
-    // If official administrator admin@blaze.com.pk with valid credentials, auto-provision Firebase Auth session
-    if (
-      cleanEmail === 'admin@blaze.com.pk' &&
-      pass === 'blaze@admin2026' &&
-      (err.code === 'auth/user-not-found' ||
-        err.code === 'auth/invalid-credential' ||
-        err.code === 'auth/invalid-login-credentials')
-    ) {
-      try {
-        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
-        try {
-          await updateProfile(cred.user, { displayName: 'Engr. Tariq Latif' });
-        } catch {}
-        try {
-          await setDoc(
-            doc(db, 'admins', cred.user.uid),
-            { email: cleanEmail, role: 'administrator', updatedAt: new Date().toISOString() },
-            { merge: true }
-          );
-        } catch {}
-        return mapFirebaseUserToAccount(cred.user);
-      } catch (createErr) {
-        console.warn('Admin user auto-creation in Firebase notice:', createErr);
-      }
+  } catch (fbErr: any) {
+    if (fbErr.code === 'auth/wrong-password') {
+      throw new Error('Incorrect password. Please verify your credentials.');
     }
-    console.error('Email sign in failed:', err);
-    throw err;
   }
+
+  throw new Error('Invalid email or password. Please verify your credentials or contact Blaze Media operations.');
 }
 
 // Administrator provisions a new Client account via isolated Firebase Auth without signing out the administrator
@@ -356,7 +449,7 @@ export async function adminCreateClientAccount(params: {
     localStorage.setItem('blaze_ooh_deleted_client_emails', JSON.stringify(nextEmails));
   } catch {}
 
-  // Attempt to provision Firebase Auth user via secondary app instance
+  // Attempt to provision Firebase Auth user via secondary app instance (gracefully handles environments with email-auth disabled in console)
   try {
     const secondaryAppName = `client-provision-${Date.now()}`;
     const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
@@ -396,6 +489,8 @@ export async function adminCreateClientAccount(params: {
     role: 'client', // Strictly enforced as client
     status: 'Active',
     requiresPasswordChange: true,
+    temporaryPassword: params.temporaryPassword,
+    password: params.temporaryPassword,
     permittedCities: params.permittedCities || [],
     createdAt: new Date().toISOString(),
     createdBy: 'admin@blaze.com.pk',
@@ -596,22 +691,100 @@ export async function adminDeleteClient(
 }
 
 // Update client permanent password on first login
-export async function updateClientPermanentPassword(newPassword: string): Promise<void> {
-  if (!auth.currentUser) throw new Error('No active authentication session.');
-  await updatePassword(auth.currentUser, newPassword);
+export async function updateClientPermanentPassword(
+  newPassword: string,
+  clientEmail?: string,
+  clientUid?: string
+): Promise<void> {
+  const cleanEmail = (clientEmail || auth.currentUser?.email || '').toLowerCase().trim();
+  const uid = clientUid || auth.currentUser?.uid;
 
-  try {
-    await setDoc(
-      doc(db, 'users', auth.currentUser.uid),
-      {
-        requiresPasswordChange: false,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-  } catch (e) {
-    console.warn('Failed to update password change flag in Firestore:', e);
+  // 1. If active Firebase Auth user session exists, try updating Firebase Auth password
+  if (auth.currentUser) {
+    try {
+      await updatePassword(auth.currentUser, newPassword);
+    } catch (e) {
+      console.warn('Firebase Auth password update notice:', e);
+    }
   }
+
+  // 2. Update Firestore document
+  if (uid) {
+    try {
+      await setDoc(
+        doc(db, 'users', uid),
+        {
+          password: newPassword,
+          temporaryPassword: newPassword,
+          requiresPasswordChange: false,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Failed to update password in Firestore by UID:', e);
+    }
+  } else if (cleanEmail) {
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await setDoc(
+          d.ref,
+          {
+            password: newPassword,
+            temporaryPassword: newPassword,
+            requiresPasswordChange: false,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+    } catch (e) {
+      console.warn('Failed to update password in Firestore by email:', e);
+    }
+  }
+
+  // 3. Update backend server store
+  try {
+    const apiUrl =
+      typeof window !== 'undefined'
+        ? '/api/auth/update-password'
+        : 'http://localhost:3000/api/auth/update-password';
+    await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, newPassword }),
+    });
+  } catch (e) {
+    console.warn('Server password update notice:', e);
+  }
+
+  // 4. Update localStorage custom clients cache & user account
+  try {
+    const cached: ManagedClientRecord[] = JSON.parse(
+      localStorage.getItem('blaze_ooh_custom_clients') || '[]'
+    );
+    const updated = cached.map((c) => {
+      if ((uid && c.id === uid) || (cleanEmail && c.email?.toLowerCase().trim() === cleanEmail)) {
+        return {
+          ...c,
+          password: newPassword,
+          temporaryPassword: newPassword,
+          requiresPasswordChange: false,
+        };
+      }
+      return c;
+    });
+    localStorage.setItem('blaze_ooh_custom_clients', JSON.stringify(updated));
+
+    const storedUser = localStorage.getItem('blaze_ooh_user');
+    if (storedUser) {
+      const parsed = JSON.parse(storedUser);
+      parsed.requiresPasswordChange = false;
+      localStorage.setItem('blaze_ooh_user', JSON.stringify(parsed));
+    }
+  } catch {}
 }
 
 // Sign Out
