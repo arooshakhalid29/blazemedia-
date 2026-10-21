@@ -125,7 +125,7 @@ export const StartingLoginWindow: React.FC<StartingLoginWindowProps> = ({
       // Check credentials for admin fallback
       if (cleanEmail === 'admin@blaze.com.pk') {
         if (signInPassword === 'blaze@admin2026') {
-          setSuccessMessage('Administrator session activated for Engr. Tariq Latif.');
+          setSuccessMessage('Administrator session activated for Admin.');
           setTimeout(() => {
             onLogin(DEMO_USERS.administrator);
           }, 600);

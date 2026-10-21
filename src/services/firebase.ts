@@ -146,7 +146,7 @@ export function mapFirebaseUserToAccount(
     return {
       id: fbUser?.uid || profileData?.id || 'usr_admin_01',
       email: fbUser?.email || profileData?.email || 'admin@blaze.com.pk',
-      name: fbUser?.displayName || profileData?.name || 'Engr. Tariq Latif',
+      name: fbUser?.displayName || profileData?.name || 'Admin',
       role: 'administrator',
       organization: 'Blaze Media (Pvt) Ltd - Operations HQ',
       designation: 'Chief Commercial & Operations Officer',

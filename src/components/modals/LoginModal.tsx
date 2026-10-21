@@ -140,7 +140,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       if (cleanEmail === 'admin@blaze.com.pk') {
         if (password === 'blaze@admin2026') {
           onLogin(DEMO_USERS.administrator);
-          setAuthSuccess('Administrator authenticated: Engr. Tariq Latif');
+          setAuthSuccess('Administrator authenticated: Admin');
           setTimeout(() => onClose(), 700);
           return;
         } else {

@@ -481,7 +481,7 @@ const AUTH_ACCOUNTS = {
   administrator: {
     id: 'usr_admin_01',
     email: 'admin@blaze.com.pk',
-    name: 'Engr. Tariq Latif',
+    name: 'Admin',
     role: 'administrator',
     organization: 'Blaze Media (Pvt) Ltd - Operations HQ',
     designation: 'Chief Commercial & Operations Officer',
