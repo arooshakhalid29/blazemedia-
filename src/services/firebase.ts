@@ -1247,9 +1247,30 @@ export async function persistBookingRequest(booking: BookingRequest): Promise<vo
 
   const payload: any = {
     ...booking,
-    clientUid: auth.currentUser?.uid || 'guest-client',
+    clientUid: auth.currentUser?.uid || (booking as any).clientUid || 'guest-client',
   };
 
+  // 1. Sync to local storage
+  try {
+    const local = JSON.parse(localStorage.getItem('blaze_ooh_bookings') || '[]');
+    const idx = local.findIndex((b: any) => b.bookingId === bookingId);
+    if (idx >= 0) local[idx] = payload;
+    else local.unshift(payload);
+    localStorage.setItem('blaze_ooh_bookings', JSON.stringify(local));
+  } catch {}
+
+  // 2. Sync to backend Express server API
+  try {
+    await fetch('/api/bookings/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.warn('Backend server booking save notice:', err);
+  }
+
+  // 3. Persist to Firestore
   try {
     await setDoc(bookingDoc, payload, { merge: true });
   } catch (error) {
@@ -1260,7 +1281,7 @@ export async function persistBookingRequest(booking: BookingRequest): Promise<vo
 // Bookings: Update status (Administrator only)
 export async function updateBookingStatus(
   bookingId: string,
-  newStatus: 'Approved & Reserved' | 'Rejected',
+  newStatus: 'Approved & Reserved' | 'Rejected' | 'Pending Admin Confirmation' | string,
   notes?: string
 ): Promise<void> {
   const bookingDoc = doc(db, 'bookings', bookingId);
@@ -1272,6 +1293,30 @@ export async function updateBookingStatus(
     updatePayload.notes = notes;
   }
 
+  // 1. Update localStorage
+  try {
+    const local = JSON.parse(localStorage.getItem('blaze_ooh_bookings') || '[]');
+    const updated = local.map((b: any) =>
+      b.bookingId === bookingId ? { ...b, ...updatePayload } : b
+    );
+    localStorage.setItem('blaze_ooh_bookings', JSON.stringify(updated));
+  } catch {}
+
+  // 2. Sync to backend Express server API
+  try {
+    await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-email': 'admin@blaze.com.pk',
+      },
+      body: JSON.stringify({ status: newStatus, notes }),
+    });
+  } catch (err) {
+    console.warn('Backend server booking status update notice:', err);
+  }
+
+  // 3. Persist to Firestore
   try {
     await setDoc(bookingDoc, updatePayload, { merge: true });
   } catch (error) {

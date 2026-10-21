@@ -36,11 +36,35 @@ export const BookingsModal: React.FC<BookingsModalProps> = ({
   const isAdmin = currentUser.role === 'administrator';
 
   const filteredBookings = bookings.filter((b) => {
-    if (!isAdmin && b.contactEmail !== currentUser.email && b.clientName !== currentUser.name) {
-      // In client mode, show only this client's bookings
-      return false;
+    if (!isAdmin) {
+      const userEmail = (currentUser.email || '').toLowerCase().trim();
+      const userName = (currentUser.name || '').toLowerCase().trim();
+      const userOrg = (currentUser.organization || '').toLowerCase().trim();
+      const bookingEmail = (b.contactEmail || '').toLowerCase().trim();
+      const bookingName = (b.clientName || '').toLowerCase().trim();
+      const bookingOrg = (b.organization || '').toLowerCase().trim();
+      const bookingUid = (b as any).clientUid;
+
+      const isOwner =
+        (bookingUid && bookingUid === currentUser.id) ||
+        (userEmail && bookingEmail === userEmail) ||
+        (userName && bookingName === userName) ||
+        (userOrg && bookingOrg === userOrg);
+
+      if (!isOwner) {
+        return false;
+      }
     }
     if (filterStatus === 'all') return true;
+    if (filterStatus === 'Pending Admin Confirmation') {
+      return b.status === 'Pending Admin Confirmation' || (b.status as string) === 'Pending';
+    }
+    if (filterStatus === 'Approved & Reserved') {
+      return b.status === 'Approved & Reserved' || (b.status as string) === 'Approved';
+    }
+    if (filterStatus === 'Rejected') {
+      return b.status === 'Rejected' || (b.status as string) === 'Declined';
+    }
     return b.status === filterStatus;
   });
 
@@ -165,14 +189,14 @@ export const BookingsModal: React.FC<BookingsModalProps> = ({
 
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                      b.status === 'Approved & Reserved'
+                      b.status === 'Approved & Reserved' || (b.status as string) === 'Approved'
                         ? 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
-                        : b.status === 'Rejected'
+                        : b.status === 'Rejected' || (b.status as string) === 'Declined'
                         ? 'bg-red-950 text-red-300 border-red-700/60'
                         : 'bg-amber-950 text-amber-300 border-amber-700/60'
                     }`}
                   >
-                    {b.status}
+                    {b.status === 'Approved & Reserved' ? 'Approved & Reserved' : b.status === 'Rejected' ? 'Declined' : b.status}
                   </span>
                 </div>
 
@@ -220,24 +244,37 @@ export const BookingsModal: React.FC<BookingsModalProps> = ({
                 )}
 
                 {/* Admin Actions */}
-                {isAdmin && b.status === 'Pending Admin Confirmation' && (
+                {isAdmin && (
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/80">
                     <span className="text-[11px] text-slate-400 mr-2 font-mono">
                       Administrator Decision:
                     </span>
-                    <button
-                      onClick={() => onUpdateBookingStatus(b.bookingId, 'Rejected')}
-                      className="px-3 py-1 bg-red-950/60 hover:bg-red-900/60 text-red-300 border border-red-800/60 rounded text-xs transition-colors"
-                    >
-                      Decline Request
-                    </button>
-                    <button
-                      onClick={() => onUpdateBookingStatus(b.bookingId, 'Approved & Reserved')}
-                      className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-xs flex items-center gap-1.5 transition-colors shadow-sm"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      Approve & Mark Site Reserved
-                    </button>
+                    {b.status !== 'Rejected' && (
+                      <button
+                        onClick={() => onUpdateBookingStatus(b.bookingId, 'Rejected')}
+                        className="px-3 py-1 bg-red-950/60 hover:bg-red-900/60 text-red-300 border border-red-800/60 rounded text-xs transition-colors flex items-center gap-1"
+                      >
+                        <X className="w-3 h-3" />
+                        Decline Request
+                      </button>
+                    )}
+                    {b.status !== 'Approved & Reserved' && (
+                      <button
+                        onClick={() => onUpdateBookingStatus(b.bookingId, 'Approved & Reserved')}
+                        className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Approve & Mark Site Reserved
+                      </button>
+                    )}
+                    {b.status !== 'Pending Admin Confirmation' && (
+                      <button
+                        onClick={() => onUpdateBookingStatus(b.bookingId, 'Pending Admin Confirmation' as any)}
+                        className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900/60 text-amber-300 border border-amber-800/60 rounded text-xs transition-colors"
+                      >
+                        Reset to Pending
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

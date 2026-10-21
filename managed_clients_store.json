@@ -1,28 +1,39 @@
 [
   {
-    "id": "usr_client_369932",
-    "name": "Danish Ali",
-    "email": "daneshali1039@gmail.com",
-    "organization": "Freelance",
-    "designation": "freelance",
+    "id": "usr_client_793648",
+    "name": "Fatima Noor",
+    "email": "testclient_1792569793645@agency.com.pk",
+    "organization": "Mindshare Pakistan",
+    "designation": "Media Director",
     "role": "client",
     "status": "Active",
     "requiresPasswordChange": true,
-    "temporaryPassword": "clientpass2026",
-    "password": "clientpass2026",
+    "temporaryPassword": "Pass1792569793645!",
+    "password": "Pass1792569793645!",
+    "permittedCities": [
+      "Karachi",
+      "Lahore"
+    ],
+    "createdAt": "2026-10-21T08:03:13.648Z",
+    "createdBy": "admin@blaze.com.pk"
+  },
+  {
+    "id": "usr_client_327630",
+    "name": "Danish Ali",
+    "email": "daneshali1039@gmail.com",
+    "organization": "Freelance",
+    "designation": "SENIOR ENG",
+    "role": "client",
+    "status": "Active",
+    "requiresPasswordChange": false,
+    "temporaryPassword": "Aks1212#",
+    "password": "Aks1212#",
     "permittedCities": [
       "Karachi",
       "Lahore",
-      "Islamabad",
-      "Rawalpindi",
-      "Faisalabad",
-      "Multan",
-      "Peshawar",
-      "Quetta",
-      "Sialkot",
-      "Gujranwala"
+      "Islamabad"
     ],
-    "createdAt": "2026-10-21T07:06:10.661Z",
+    "createdAt": "2026-10-21T07:38:48.399Z",
     "createdBy": "admin@blaze.com.pk"
   },
   {

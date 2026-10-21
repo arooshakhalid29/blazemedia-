@@ -328,7 +328,7 @@ async function syncClientsFromFirestore() {
             designation: data.designation || 'Media Planning Executive',
             role: 'client' as const,
             status: data.status || 'Active',
-            requiresPasswordChange: data.requiresPasswordChange !== false,
+            requiresPasswordChange: data.requiresPasswordChange === true,
             temporaryPassword: data.temporaryPassword || data.password || '',
             password: data.password || data.temporaryPassword || '',
             permittedCities: Array.isArray(data.permittedCities) ? data.permittedCities : [],
@@ -337,11 +337,10 @@ async function syncClientsFromFirestore() {
           };
           if (existingIdx >= 0) {
             managedClientStore[existingIdx] = {
-              ...record,
               ...managedClientStore[existingIdx],
-              temporaryPassword:
-                managedClientStore[existingIdx].temporaryPassword || record.temporaryPassword,
-              password: managedClientStore[existingIdx].password || record.password,
+              ...record,
+              temporaryPassword: record.temporaryPassword || managedClientStore[existingIdx].temporaryPassword,
+              password: record.password || managedClientStore[existingIdx].password,
             };
           } else {
             managedClientStore.push(record);
@@ -529,50 +528,62 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     });
   }
 
-  // Find client in provisioned store
-  let foundClient = managedClientStore.find(c => c.email?.toLowerCase().trim() === cleanEmail);
-
-  // If not found in memory store, query Firestore /users collection directly
-  if (!foundClient) {
-    try {
-      const q = query(collection(serverDb, 'users'), where('email', '==', cleanEmail));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const docSnap = snap.docs[0];
-        const data = docSnap.data() as any;
-        foundClient = {
-          id: docSnap.id,
-          name: data.name || cleanEmail.split('@')[0],
-          email: cleanEmail,
-          organization: data.organization || 'Advertiser Agency Client',
-          designation: data.designation || 'Media Planning Executive',
-          role: 'client' as const,
-          status: data.status || 'Active',
-          requiresPasswordChange: data.requiresPasswordChange !== false,
-          temporaryPassword: data.temporaryPassword || data.password || '',
-          password: data.password || data.temporaryPassword || '',
-          permittedCities: Array.isArray(data.permittedCities) ? data.permittedCities : [],
-          createdAt: data.createdAt || new Date().toISOString(),
-          createdBy: data.createdBy || 'admin@blaze.com.pk',
+  // Always query Firestore to ensure freshest user credentials from database
+  try {
+    const q = query(collection(serverDb, 'users'), where('email', '==', cleanEmail));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docSnap = snap.docs[0];
+      const data = docSnap.data() as any;
+      const firestoreClient = {
+        id: docSnap.id,
+        name: data.name || cleanEmail.split('@')[0],
+        email: cleanEmail,
+        organization: data.organization || 'Advertiser Agency Client',
+        designation: data.designation || 'Media Planning Executive',
+        role: 'client' as const,
+        status: data.status || 'Active',
+        requiresPasswordChange: data.requiresPasswordChange === true,
+        temporaryPassword: data.temporaryPassword || data.password || '',
+        password: data.password || data.temporaryPassword || '',
+        permittedCities: Array.isArray(data.permittedCities) ? data.permittedCities : [],
+        createdAt: data.createdAt || new Date().toISOString(),
+        createdBy: data.createdBy || 'admin@blaze.com.pk',
+      };
+      const idx = managedClientStore.findIndex((c) => c.email?.toLowerCase().trim() === cleanEmail);
+      if (idx >= 0) {
+        managedClientStore[idx] = {
+          ...managedClientStore[idx],
+          ...firestoreClient,
+          temporaryPassword: firestoreClient.temporaryPassword || managedClientStore[idx].temporaryPassword,
+          password: firestoreClient.password || managedClientStore[idx].password,
         };
-        managedClientStore.push(foundClient);
-        saveClientStore();
+      } else {
+        managedClientStore.push(firestoreClient);
       }
-    } catch (e: any) {
-      console.warn('Notice checking Firestore in login route:', e.message);
+      saveClientStore();
     }
+  } catch (e: any) {
+    console.warn('Notice checking Firestore in login route:', e.message);
   }
+
+  // Find client in provisioned store
+  const foundClient = managedClientStore.find(c => c.email?.toLowerCase().trim() === cleanEmail);
 
   if (foundClient) {
     const expectedPassword = foundClient.password || foundClient.temporaryPassword;
+    const isPasswordValid =
+      (foundClient.password && password === foundClient.password) ||
+      (foundClient.temporaryPassword && password === foundClient.temporaryPassword);
+
     if (expectedPassword) {
-      if (password && password !== expectedPassword) {
+      if (!isPasswordValid) {
         return res.status(401).json({
           error: 'Invalid password. Please enter the temporary password provided by your administrator.',
         });
       }
     } else {
-      // First login for legacy client created without a password stored (e.g. Danish Ali)
+      // First login for legacy client created without a password stored
       foundClient.password = password;
       foundClient.temporaryPassword = password;
       saveClientStore();
@@ -589,7 +600,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       organization: foundClient.organization,
       designation: foundClient.designation,
       permissions: AUTH_ACCOUNTS.clientPermissions,
-      requiresPasswordChange: foundClient.requiresPasswordChange !== false,
+      requiresPasswordChange: foundClient.requiresPasswordChange === true,
       permittedCities: foundClient.permittedCities || [],
       status: foundClient.status || 'Active',
     };
@@ -714,37 +725,226 @@ app.get('/api/auth/users', (req: Request, res: Response) => {
   });
 });
 
-// Client Booking Reservation API
+// Client Booking Reservation API with Disk Persistence & Live Firestore Sync
+const BOOKINGS_STORAGE_PATH = path.resolve('bookings_store.json');
 let clientBookingRequests: any[] = [];
 
-app.post('/api/bookings/request', (req: Request, res: Response) => {
-  const { clientName, assetId, assetCode, durationMonths, startDate, brandName, contactEmail } = req.body;
+try {
+  if (fs.existsSync(BOOKINGS_STORAGE_PATH)) {
+    const raw = fs.readFileSync(BOOKINGS_STORAGE_PATH, 'utf-8');
+    clientBookingRequests = JSON.parse(raw);
+    console.log(`[Blaze Bookings] Loaded ${clientBookingRequests.length} booking request(s) from persistent store.`);
+  }
+} catch (e) {
+  console.warn('Notice reading bookings storage file:', e);
+}
 
-  const booking = {
-    bookingId: `BK-BLZ-${Date.now().toString().slice(-6)}`,
-    clientName: clientName || 'Client Advertiser',
-    contactEmail: contactEmail || 'client@engro.com',
+function saveBookingsStore() {
+  try {
+    fs.writeFileSync(BOOKINGS_STORAGE_PATH, JSON.stringify(clientBookingRequests, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('Notice saving bookings storage file:', e);
+  }
+}
+
+// Sync bookings from Firestore on boot
+async function syncBookingsFromFirestore() {
+  try {
+    const snap = await getDocs(collection(serverDb, 'bookings'));
+    if (!snap.empty) {
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const bId = data.bookingId || d.id;
+        if (bId === 'BK-BLZ-782104' || bId === 'BK-BLZ-761922') return;
+        const idx = clientBookingRequests.findIndex((b) => b.bookingId === bId);
+        const record = {
+          ...data,
+          bookingId: bId,
+        };
+        if (idx >= 0) {
+          clientBookingRequests[idx] = { ...clientBookingRequests[idx], ...record };
+        } else {
+          clientBookingRequests.push(record);
+        }
+      });
+      clientBookingRequests.sort(
+        (a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
+      );
+      saveBookingsStore();
+      console.log(`[Blaze Bookings] Synced ${clientBookingRequests.length} booking(s) with Firestore.`);
+    }
+  } catch (err: any) {
+    console.warn('Notice syncing bookings from Firestore:', err.message);
+  }
+}
+syncBookingsFromFirestore();
+
+// Submit new booking request
+app.post('/api/bookings/request', async (req: Request, res: Response) => {
+  const {
+    bookingId: incomingId,
+    clientName,
+    organization,
+    contactEmail,
+    phone,
     assetId,
     assetCode,
+    brandName,
+    durationMonths,
+    startDate,
+    notes,
+    quotedAmountPkr,
+    status,
+  } = req.body;
+
+  const bookingId = incomingId || `BK-BLZ-${Date.now().toString().slice(-6)}`;
+  const booking = {
+    bookingId,
+    clientName: clientName || 'Client Advertiser',
+    organization: organization || 'Advertiser Agency Client',
+    contactEmail: (contactEmail || 'client@blaze.com.pk').toLowerCase().trim(),
+    phone: phone || '',
+    assetId: assetId || '',
+    assetCode: assetCode || '',
     brandName: brandName || 'Brand Campaign',
-    durationMonths: durationMonths || 1,
+    durationMonths: Number(durationMonths) || 1,
     startDate: startDate || new Date().toISOString().split('T')[0],
     submittedAt: new Date().toISOString(),
-    status: 'Pending Admin Confirmation',
+    status: status || 'Pending Admin Confirmation',
+    quotedAmountPkr: Number(quotedAmountPkr) || 0,
+    notes: notes || '',
   };
 
-  clientBookingRequests.push(booking);
+  const existingIdx = clientBookingRequests.findIndex((b) => b.bookingId === bookingId);
+  if (existingIdx >= 0) {
+    clientBookingRequests[existingIdx] = { ...clientBookingRequests[existingIdx], ...booking };
+  } else {
+    clientBookingRequests.unshift(booking);
+  }
+  saveBookingsStore();
+
+  // Save directly to Firestore
+  try {
+    await setDoc(doc(serverDb, 'bookings', bookingId), booking, { merge: true });
+  } catch (err: any) {
+    console.warn('Notice persisting booking to Firestore:', err.message);
+  }
 
   res.json({
     success: true,
     booking,
-    message: `Site reservation request submitted for ${assetCode}. Blaze Media commercial team will confirm within 24 hours.`,
+    message: `Site reservation request submitted for ${assetCode}. Blaze Media commercial desk notified.`,
   });
 });
 
-app.get('/api/bookings', (req: Request, res: Response) => {
+// Update booking status (Admin endpoint, handles 'Approved & Reserved', 'Rejected', etc.)
+app.patch('/api/bookings/:id/status', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status, notes } = req.body;
+
+  if (!status) {
+    return res.status(400).json({ error: 'Status is required.' });
+  }
+
+  const bookingId = decodeURIComponent(id);
+  const updatePayload: Record<string, any> = {
+    status,
+    updatedAt: new Date().toISOString(),
+  };
+  if (notes !== undefined) {
+    updatePayload.notes = notes;
+  }
+
+  const idx = clientBookingRequests.findIndex((b) => b.bookingId === bookingId);
+  if (idx >= 0) {
+    clientBookingRequests[idx] = { ...clientBookingRequests[idx], ...updatePayload };
+    saveBookingsStore();
+  }
+
+  // Persist to Firestore
+  try {
+    await setDoc(doc(serverDb, 'bookings', bookingId), updatePayload, { merge: true });
+  } catch (err: any) {
+    console.warn('Notice updating booking status in Firestore:', err.message);
+  }
+
   res.json({
-    bookings: clientBookingRequests,
+    success: true,
+    bookingId,
+    status,
+    message: `Booking ${bookingId} status updated to ${status}.`,
+  });
+});
+
+// Also support POST for status update
+app.post('/api/bookings/:id/status', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status, notes } = req.body;
+
+  if (!status) {
+    return res.status(400).json({ error: 'Status is required.' });
+  }
+
+  const bookingId = decodeURIComponent(id);
+  const updatePayload: Record<string, any> = {
+    status,
+    updatedAt: new Date().toISOString(),
+  };
+  if (notes !== undefined) {
+    updatePayload.notes = notes;
+  }
+
+  const idx = clientBookingRequests.findIndex((b) => b.bookingId === bookingId);
+  if (idx >= 0) {
+    clientBookingRequests[idx] = { ...clientBookingRequests[idx], ...updatePayload };
+    saveBookingsStore();
+  }
+
+  try {
+    await setDoc(doc(serverDb, 'bookings', bookingId), updatePayload, { merge: true });
+  } catch (err: any) {
+    console.warn('Notice updating booking status in Firestore:', err.message);
+  }
+
+  res.json({
+    success: true,
+    bookingId,
+    status,
+    message: `Booking ${bookingId} status updated to ${status}.`,
+  });
+});
+
+// Get bookings (all or filtered by email)
+app.get('/api/bookings', async (req: Request, res: Response) => {
+  const email = ((req.query.email as string) || '').toLowerCase().trim();
+
+  // Refresh from Firestore
+  try {
+    const snap = await getDocs(collection(serverDb, 'bookings'));
+    if (!snap.empty) {
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const bId = data.bookingId || d.id;
+        if (bId === 'BK-BLZ-782104' || bId === 'BK-BLZ-761922') return;
+        const idx = clientBookingRequests.findIndex((b) => b.bookingId === bId);
+        if (idx >= 0) {
+          clientBookingRequests[idx] = { ...clientBookingRequests[idx], ...data, bookingId: bId };
+        } else {
+          clientBookingRequests.push({ ...data, bookingId: bId });
+        }
+      });
+      clientBookingRequests.sort(
+        (a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
+      );
+    }
+  } catch {}
+
+  const results = email
+    ? clientBookingRequests.filter((b) => b.contactEmail?.toLowerCase().trim() === email)
+    : clientBookingRequests;
+
+  res.json({
+    bookings: results,
   });
 });
 

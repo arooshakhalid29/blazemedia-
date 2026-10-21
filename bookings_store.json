@@ -1,0 +1,53 @@
+[
+  {
+    "bookingId": "BK-TEST-793756",
+    "clientName": "Fatima Noor",
+    "organization": "Mindshare Pakistan",
+    "contactEmail": "testclient_1792569793645@agency.com.pk",
+    "phone": "+92 300 9876543",
+    "assetId": "BLZ-KAR-BLB-162",
+    "assetCode": "KAR-BLB-162",
+    "brandName": "Pepsi Summer Wave",
+    "durationMonths": 2,
+    "startDate": "2026-11-01",
+    "submittedAt": "2026-10-21T08:03:13.758Z",
+    "status": "Rejected",
+    "quotedAmountPkr": 3000000,
+    "notes": "Site already occupied by competing telecom brand.",
+    "updatedAt": "2026-10-21T08:03:14.616Z"
+  },
+  {
+    "clientName": "Engr. Tariq Latif",
+    "assetCode": "KAR-BLB-162",
+    "submittedAt": "2026-10-21T07:53:42.745Z",
+    "organization": "Blaze Media (Pvt) Ltd - Operations HQ",
+    "bookingId": "BK-BLZ-222745",
+    "contactEmail": "admin@blaze.com.pk",
+    "quotedAmountPkr": 4500000,
+    "assetId": "BLZ-KAR-BLB-162",
+    "durationMonths": 3,
+    "clientUid": "guest-client",
+    "notes": "Batch campaign proposal submission for 3 months.",
+    "brandName": "National Brand Refresh Campaign 2026",
+    "status": "Approved & Reserved",
+    "startDate": "2026-10-28",
+    "updatedAt": "2026-10-21T07:54:00.312Z"
+  },
+  {
+    "organization": "Freelance",
+    "status": "Approved & Reserved",
+    "clientName": "Danish Ali",
+    "notes": "Batch campaign proposal submission for 3 months.",
+    "bookingId": "BK-BLZ-154185",
+    "contactEmail": "daneshali1039@gmail.com",
+    "submittedAt": "2026-10-21T07:52:34.185Z",
+    "assetCode": "KAR-BLB-366",
+    "updatedAt": "2026-10-21T07:53:32.663Z",
+    "startDate": "2026-10-28",
+    "brandName": "National Brand Refresh Campaign 2026",
+    "clientUid": "guest-client",
+    "assetId": "BLZ-KAR-BLB-366",
+    "quotedAmountPkr": 4500000,
+    "durationMonths": 3
+  }
+]

@@ -232,6 +232,27 @@ export default function App() {
         }
       })
       .catch((err) => console.warn('Server assets initial fetch notice:', err));
+
+    fetch('/api/bookings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.bookings && Array.isArray(data.bookings) && data.bookings.length > 0) {
+          const clean = data.bookings.filter(
+            (b: any) => b.bookingId !== 'BK-BLZ-782104' && b.bookingId !== 'BK-BLZ-761922'
+          );
+          if (clean.length > 0) {
+            setBookings((prev) => {
+              const map = new Map<string, BookingRequest>();
+              clean.forEach((b: any) => map.set(b.bookingId, b));
+              prev.forEach((b) => map.set(b.bookingId, b));
+              return Array.from(map.values()).sort(
+                (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+              );
+            });
+          }
+        }
+      })
+      .catch((err) => console.warn('Server bookings initial fetch notice:', err));
   }, []);
 
   // Listen to Firebase Authentication State
@@ -822,16 +843,16 @@ export default function App() {
 
   const handleUpdateBookingStatus = async (
     bookingId: string,
-    newStatus: 'Approved & Reserved' | 'Rejected'
+    newStatus: 'Approved & Reserved' | 'Rejected' | 'Pending Admin Confirmation' | string
   ) => {
     setBookings((prev) =>
-      prev.map((b) => (b.bookingId === bookingId ? { ...b, status: newStatus } : b))
+      prev.map((b) => (b.bookingId === bookingId ? { ...b, status: newStatus as any } : b))
     );
 
     const booking = bookings.find((b) => b.bookingId === bookingId);
     if (booking && newStatus === 'Approved & Reserved') {
       const updatedAssets = assets.map((a) =>
-        a.id === booking.assetId
+        a.id === booking.assetId || a.code === booking.assetCode || a.id === `BLZ-${booking.assetCode}`
           ? { ...a, status: 'Reserved' as AssetStatus, currentBrandOccupant: booking.brandName }
           : a
       );
@@ -840,7 +861,24 @@ export default function App() {
         `Booking ${bookingId} approved! Site ${booking.assetCode} marked as Reserved for ${booking.clientName}.`,
         'success'
       );
-      const targetAsset = updatedAssets.find((a) => a.id === booking.assetId);
+      const targetAsset = updatedAssets.find(
+        (a) => a.id === booking.assetId || a.code === booking.assetCode
+      );
+      if (targetAsset) {
+        persistMediaAsset(targetAsset).catch(console.error);
+      }
+    } else if (booking && (newStatus === 'Rejected' || newStatus === 'Pending Admin Confirmation')) {
+      const updatedAssets = assets.map((a) =>
+        (a.id === booking.assetId || a.code === booking.assetCode || a.id === `BLZ-${booking.assetCode}`) &&
+        a.status === 'Reserved'
+          ? { ...a, status: 'Available' as AssetStatus, currentBrandOccupant: undefined }
+          : a
+      );
+      setAssets(updatedAssets);
+      showToast(`Booking ${bookingId} status updated to ${newStatus}.`, 'info');
+      const targetAsset = updatedAssets.find(
+        (a) => a.id === booking.assetId || a.code === booking.assetCode
+      );
       if (targetAsset) {
         persistMediaAsset(targetAsset).catch(console.error);
       }
