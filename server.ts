@@ -10,6 +10,7 @@ import {
   getDocs,
   doc,
   setDoc,
+  deleteDoc,
   query,
   where,
 } from 'firebase/firestore';
@@ -945,6 +946,338 @@ app.get('/api/bookings', async (req: Request, res: Response) => {
 
   res.json({
     bookings: results,
+  });
+});
+
+// ==========================================
+// Media Vendors & Concessionaires API
+// ==========================================
+const VENDORS_STORAGE_PATH = path.resolve('vendors_store.json');
+
+const DEFAULT_SEED_VENDORS = [
+  {
+    id: 'vnd_blaze_01',
+    name: 'Blaze Media (Pvt) Ltd',
+    code: 'BLZ',
+    city: 'Karachi',
+    contactPerson: 'Commercial Operations Desk',
+    phone: '+92 21 35876543',
+    email: 'info@blaze.com.pk',
+    address: 'Clifton Commercial Area, Karachi',
+    commissionRatePercent: 15,
+    status: 'Active',
+    notes: 'Direct primary concessionaire and network operator.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'vnd_signways_02',
+    name: 'Signways OOH Network',
+    code: 'SGW',
+    city: 'Lahore',
+    contactPerson: 'Khurram Shahzad',
+    phone: '+92 42 35789123',
+    email: 'operations@signways.pk',
+    address: 'Gulberg III, Lahore',
+    commissionRatePercent: 12,
+    status: 'Active',
+    notes: 'Major arterial network in Punjab.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'vnd_dawn_03',
+    name: 'Dawn Outdoor Media',
+    code: 'DWN',
+    city: 'Karachi',
+    contactPerson: 'Asad Hashmi',
+    phone: '+92 21 35678901',
+    email: 'outdoor@dawnmedia.com.pk',
+    address: 'Haroon House, Dr. Ziauddin Ahmed Road, Karachi',
+    commissionRatePercent: 10,
+    status: 'Active',
+    notes: 'Premium city centre sites in Karachi & Islamabad.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'vnd_adgroup_04',
+    name: 'Adgroup Media Pakistan',
+    code: 'ADG',
+    city: 'Islamabad',
+    contactPerson: 'Salman Raza',
+    phone: '+92 51 2278901',
+    email: 'concession@adgroup.com.pk',
+    address: 'Blue Area, Islamabad',
+    commissionRatePercent: 12,
+    status: 'Active',
+    notes: 'Prime transit and capital city displays.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'vnd_prime_05',
+    name: 'Prime Signage Networks',
+    code: 'PRM',
+    city: 'Rawalpindi',
+    contactPerson: 'Farhan Malik',
+    phone: '+92 51 5567890',
+    email: 'info@primesignage.pk',
+    address: 'Mall Road, Rawalpindi Cantt',
+    commissionRatePercent: 10,
+    status: 'Active',
+    notes: 'Twin cities key intersections.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'vnd_metropole_06',
+    name: 'Metropole Media Network',
+    code: 'MTP',
+    city: 'Lahore',
+    contactPerson: 'Imran Qureshi',
+    phone: '+92 42 37561234',
+    email: 'sales@metropoleooh.com',
+    address: 'Mall Road & Jail Road Corridor, Lahore',
+    commissionRatePercent: 15,
+    status: 'Active',
+    notes: 'High-density urban corridors.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'vnd_dynamic_07',
+    name: 'Dynamic Display DOOH',
+    code: 'DYN',
+    city: 'Karachi',
+    contactPerson: 'Bilal Siddiqui',
+    phone: '+92 21 34567890',
+    email: 'dooh@dynamicdisplay.pk',
+    address: 'Shahrah-e-Faisal Media Hub, Karachi',
+    commissionRatePercent: 15,
+    status: 'Active',
+    notes: 'Digital LED screens and smart outdoor.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+let serverVendorStore: any[] = [];
+
+try {
+  if (fs.existsSync(VENDORS_STORAGE_PATH)) {
+    const raw = fs.readFileSync(VENDORS_STORAGE_PATH, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      serverVendorStore = parsed;
+    } else {
+      serverVendorStore = [...DEFAULT_SEED_VENDORS];
+    }
+  } else {
+    serverVendorStore = [...DEFAULT_SEED_VENDORS];
+    fs.writeFileSync(VENDORS_STORAGE_PATH, JSON.stringify(serverVendorStore, null, 2), 'utf-8');
+  }
+} catch (e) {
+  serverVendorStore = [...DEFAULT_SEED_VENDORS];
+}
+
+function saveVendorStore() {
+  try {
+    fs.writeFileSync(VENDORS_STORAGE_PATH, JSON.stringify(serverVendorStore, null, 2), 'utf-8');
+  } catch (err: any) {
+    console.warn('Could not persist vendors_store.json to disk:', err.message);
+  }
+}
+
+// Sync vendors with Firestore
+async function syncVendorsFromFirestore() {
+  try {
+    const snap = await getDocs(collection(serverDb, 'vendors'));
+    if (!snap.empty) {
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const vId = data.id || d.id;
+        const idx = serverVendorStore.findIndex((v) => v.id === vId);
+        if (idx >= 0) {
+          serverVendorStore[idx] = { ...serverVendorStore[idx], ...data, id: vId };
+        } else {
+          serverVendorStore.push({ ...data, id: vId });
+        }
+      });
+      serverVendorStore.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      saveVendorStore();
+      console.log(`[Blaze Vendors] Synced ${serverVendorStore.length} vendor(s) with Firestore.`);
+    } else {
+      // Seed Firestore with default vendors
+      console.log('[Blaze Vendors] Seeding Firestore with standard media vendors...');
+      for (const vnd of serverVendorStore) {
+        try {
+          await setDoc(doc(serverDb, 'vendors', vnd.id), vnd, { merge: true });
+        } catch {}
+      }
+    }
+  } catch (err: any) {
+    console.warn('Notice syncing vendors from Firestore:', err.message);
+  }
+}
+syncVendorsFromFirestore();
+
+// GET all vendors
+app.get('/api/vendors', async (req: Request, res: Response) => {
+  // Sync if needed
+  try {
+    const snap = await getDocs(collection(serverDb, 'vendors'));
+    if (!snap.empty) {
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const vId = data.id || d.id;
+        const idx = serverVendorStore.findIndex((v) => v.id === vId);
+        if (idx >= 0) {
+          serverVendorStore[idx] = { ...serverVendorStore[idx], ...data, id: vId };
+        } else {
+          serverVendorStore.push({ ...data, id: vId });
+        }
+      });
+      serverVendorStore.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }
+  } catch {}
+
+  res.json({
+    success: true,
+    vendors: serverVendorStore,
+    total: serverVendorStore.length,
+  });
+});
+
+// POST add new vendor (Administrator only)
+app.post('/api/vendors', async (req: Request, res: Response) => {
+  if (!verifyAdminAuthorization(req)) {
+    return res.status(403).json({ error: 'Access denied: Administrator privileges required (admin@blaze.com.pk only).' });
+  }
+
+  const { name, code, city, contactPerson, phone, email, address, commissionRatePercent, status, notes } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Vendor name is required.' });
+  }
+
+  const vendorId = req.body.id || `vnd_${Date.now().toString(36)}`;
+  const newVendor = {
+    id: vendorId,
+    name: name.trim(),
+    code: (code || name.slice(0, 3)).toUpperCase().trim(),
+    city: city?.trim() || 'Karachi',
+    contactPerson: contactPerson?.trim() || 'Operations Manager',
+    phone: phone?.trim() || '',
+    email: email?.toLowerCase().trim() || '',
+    address: address?.trim() || '',
+    commissionRatePercent: Number(commissionRatePercent) || 15,
+    status: status === 'Inactive' ? 'Inactive' : 'Active',
+    notes: notes?.trim() || '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const existingIdx = serverVendorStore.findIndex((v) => v.id === vendorId || v.name.toLowerCase().trim() === newVendor.name.toLowerCase());
+  if (existingIdx >= 0) {
+    serverVendorStore[existingIdx] = { ...serverVendorStore[existingIdx], ...newVendor };
+  } else {
+    serverVendorStore.unshift(newVendor);
+  }
+  serverVendorStore.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  saveVendorStore();
+
+  // Persist to Firestore
+  try {
+    await setDoc(doc(serverDb, 'vendors', vendorId), newVendor, { merge: true });
+  } catch (err: any) {
+    console.warn('Notice saving vendor to Firestore:', err.message);
+  }
+
+  res.json({
+    success: true,
+    vendor: newVendor,
+    message: `Vendor ${newVendor.name} added successfully.`,
+  });
+});
+
+// PATCH / PUT update vendor (Administrator only)
+const handleVendorUpdate = async (req: Request, res: Response) => {
+  if (!verifyAdminAuthorization(req)) {
+    return res.status(403).json({ error: 'Access denied: Administrator privileges required (admin@blaze.com.pk only).' });
+  }
+
+  const vendorId = decodeURIComponent(req.params.id);
+  const idx = serverVendorStore.findIndex((v) => v.id === vendorId);
+
+  if (idx < 0) {
+    return res.status(404).json({ error: 'Vendor not found.' });
+  }
+
+  const oldVendor = serverVendorStore[idx];
+  const oldName = oldVendor.name;
+
+  const updates = { ...req.body };
+  delete updates.id; // Preserve ID
+  updates.updatedAt = new Date().toISOString();
+
+  if (updates.code) {
+    updates.code = updates.code.toUpperCase().trim();
+  }
+
+  const updatedVendor = {
+    ...oldVendor,
+    ...updates,
+  };
+
+  serverVendorStore[idx] = updatedVendor;
+  saveVendorStore();
+
+  // If vendor name was changed, also cascade update assets that were linked to oldName
+  if (updates.name && updates.name.trim() !== oldName) {
+    const newName = updates.name.trim();
+    serverAssetStore = serverAssetStore.map((a) => {
+      if (a.vendor === oldName) {
+        return { ...a, vendor: newName };
+      }
+      return a;
+    });
+  }
+
+  // Persist to Firestore
+  try {
+    await setDoc(doc(serverDb, 'vendors', vendorId), updatedVendor, { merge: true });
+  } catch (err: any) {
+    console.warn('Notice updating vendor in Firestore:', err.message);
+  }
+
+  res.json({
+    success: true,
+    vendor: updatedVendor,
+    message: `Vendor ${updatedVendor.name} specifications updated successfully.`,
+  });
+};
+
+app.patch('/api/vendors/:id', handleVendorUpdate);
+app.put('/api/vendors/:id', handleVendorUpdate);
+
+// DELETE vendor (Administrator only)
+app.delete('/api/vendors/:id', async (req: Request, res: Response) => {
+  if (!verifyAdminAuthorization(req)) {
+    return res.status(403).json({ error: 'Access denied: Administrator privileges required (admin@blaze.com.pk only).' });
+  }
+
+  const vendorId = decodeURIComponent(req.params.id);
+  const targetVendor = serverVendorStore.find((v) => v.id === vendorId);
+  const vendorName = targetVendor?.name || vendorId;
+
+  serverVendorStore = serverVendorStore.filter((v) => v.id !== vendorId);
+  saveVendorStore();
+
+  // Delete from Firestore
+  try {
+    await deleteDoc(doc(serverDb, 'vendors', vendorId));
+  } catch (err: any) {
+    console.warn('Notice deleting vendor from Firestore:', err.message);
+  }
+
+  res.json({
+    success: true,
+    message: `Vendor ${vendorName} removed from directory.`,
+    remaining: serverVendorStore.length,
   });
 });
 

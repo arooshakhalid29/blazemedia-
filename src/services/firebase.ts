@@ -35,6 +35,8 @@ import {
   DEMO_USERS,
   isAuthorizedAdminEmail,
   ManagedClientRecord,
+  VendorRecord,
+  INITIAL_VENDORS,
 } from '../types/mediaAsset';
 
 // Initialize Firebase App
@@ -1323,3 +1325,212 @@ export async function updateBookingStatus(
     handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
   }
 }
+
+// ==========================================
+// Vendors: Real-time Listener & Management
+// ==========================================
+
+export function getLocalVendors(): VendorRecord[] {
+  try {
+    const raw = localStorage.getItem('blaze_ooh_vendors');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return [...INITIAL_VENDORS];
+}
+
+export function subscribeToVendors(
+  onVendors: (vendors: VendorRecord[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  const vendorsCol = collection(db, 'vendors');
+
+  return onSnapshot(
+    vendorsCol,
+    (snapshot) => {
+      if (snapshot.empty) {
+        // Fall back to local / initial vendors if collection is currently empty
+        const localVendors = getLocalVendors();
+        onVendors(localVendors);
+        return;
+      }
+      const items: VendorRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(docSnap.data() as VendorRecord);
+      });
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      try {
+        localStorage.setItem('blaze_ooh_vendors', JSON.stringify(items));
+      } catch {}
+      onVendors(items);
+    },
+    (error) => {
+      console.warn('Real-time vendors sync notice:', error.message);
+      if (onError) onError(error);
+      const localVendors = getLocalVendors();
+      onVendors(localVendors);
+    }
+  );
+}
+
+export async function fetchVendors(): Promise<VendorRecord[]> {
+  const vendorMap = new Map<string, VendorRecord>();
+
+  // 1. Fetch from Firestore
+  try {
+    const vendorsCol = collection(db, 'vendors');
+    const snap = await getDocs(vendorsCol);
+    if (!snap.empty) {
+      snap.forEach((d) => {
+        const data = d.data() as VendorRecord;
+        if (data.id && data.name) {
+          vendorMap.set(data.id, data);
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('Firestore vendors query notice:', err);
+  }
+
+  // 2. Fetch from backend server API
+  try {
+    const apiUrl = typeof window !== 'undefined' ? '/api/vendors' : 'http://localhost:3000/api/vendors';
+    const res = await fetch(apiUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.vendors)) {
+        data.vendors.forEach((v: VendorRecord) => {
+          if (!vendorMap.has(v.id)) {
+            vendorMap.set(v.id, v);
+          }
+        });
+      }
+    }
+  } catch {}
+
+  // 3. Fallback to localStorage or INITIAL_VENDORS
+  if (vendorMap.size === 0) {
+    getLocalVendors().forEach((v) => vendorMap.set(v.id, v));
+  }
+
+  const result = Array.from(vendorMap.values());
+  result.sort((a, b) => a.name.localeCompare(b.name));
+  return result;
+}
+
+export async function persistVendor(vendor: VendorRecord): Promise<void> {
+  const vendorId = vendor.id || `vnd_${Date.now().toString(36)}`;
+  const payload: VendorRecord = {
+    ...vendor,
+    id: vendorId,
+    createdAt: vendor.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 1. Update localStorage
+  try {
+    const current = getLocalVendors();
+    const idx = current.findIndex((v) => v.id === vendorId);
+    let updated: VendorRecord[];
+    if (idx >= 0) {
+      updated = [...current];
+      updated[idx] = payload;
+    } else {
+      updated = [payload, ...current];
+    }
+    localStorage.setItem('blaze_ooh_vendors', JSON.stringify(updated));
+  } catch {}
+
+  // 2. Sync to backend API
+  try {
+    await fetch('/api/vendors', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-email': 'admin@blaze.com.pk',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.warn('Backend server vendor save notice:', err);
+  }
+
+  // 3. Persist to Firestore
+  try {
+    const vendorDoc = doc(db, 'vendors', vendorId);
+    await setDoc(vendorDoc, payload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `vendors/${vendorId}`);
+  }
+}
+
+export async function updateVendorRecord(
+  vendorId: string,
+  updates: Partial<VendorRecord>
+): Promise<void> {
+  const updatePayload = {
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 1. Update localStorage
+  try {
+    const current = getLocalVendors();
+    const updated = current.map((v) => (v.id === vendorId ? { ...v, ...updatePayload } : v));
+    localStorage.setItem('blaze_ooh_vendors', JSON.stringify(updated));
+  } catch {}
+
+  // 2. Sync to backend API
+  try {
+    await fetch(`/api/vendors/${encodeURIComponent(vendorId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-email': 'admin@blaze.com.pk',
+      },
+      body: JSON.stringify(updatePayload),
+    });
+  } catch (err) {
+    console.warn('Backend server vendor update notice:', err);
+  }
+
+  // 3. Persist to Firestore
+  try {
+    const vendorDoc = doc(db, 'vendors', vendorId);
+    await setDoc(vendorDoc, updatePayload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `vendors/${vendorId}`);
+  }
+}
+
+export async function deleteVendorRecord(vendorId: string): Promise<void> {
+  // 1. Update localStorage
+  try {
+    const current = getLocalVendors();
+    const updated = current.filter((v) => v.id !== vendorId);
+    localStorage.setItem('blaze_ooh_vendors', JSON.stringify(updated));
+  } catch {}
+
+  // 2. Sync to backend API
+  try {
+    await fetch(`/api/vendors/${encodeURIComponent(vendorId)}`, {
+      method: 'DELETE',
+      headers: {
+        'x-admin-email': 'admin@blaze.com.pk',
+      },
+    });
+  } catch (err) {
+    console.warn('Backend server vendor delete notice:', err);
+  }
+
+  // 3. Delete from Firestore
+  try {
+    const vendorDoc = doc(db, 'vendors', vendorId);
+    await deleteDoc(vendorDoc);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `vendors/${vendorId}`);
+  }
+}
+

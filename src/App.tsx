@@ -15,6 +15,7 @@ import {
   STANDARD_VENDORS,
   AssetStatus,
   isAuthorizedAdminEmail,
+  VendorRecord,
 } from './types/mediaAsset';
 import { LEGACY_DUMMY_ASSET_IDS } from './data/mockAssets';
 import { WindowsTitleBar } from './components/desktop/WindowsTitleBar';
@@ -35,6 +36,7 @@ import { EditAssetModal } from './components/modals/EditAssetModal';
 import { BookingRequestModal } from './components/modals/BookingRequestModal';
 import { PakistanCitiesModal } from './components/modals/PakistanCitiesModal';
 import { ManageClientsModal } from './components/modals/ManageClientsModal';
+import { ManageVendorsModal } from './components/modals/ManageVendorsModal';
 import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { StartingLoginWindow } from './components/modals/StartingLoginWindow';
 import { DeleteAssetConfirmationModal } from './components/modals/DeleteAssetConfirmationModal';
@@ -49,6 +51,8 @@ import {
   subscribeToBookings,
   persistBookingRequest,
   updateBookingStatus,
+  subscribeToVendors,
+  getLocalVendors,
   auth,
   mapFirebaseUserToAccount,
   fetchStoredUserProfile,
@@ -183,6 +187,8 @@ export default function App() {
   const [isNewAssetModalOpen, setIsNewAssetModalOpen] = useState<boolean>(false);
   const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState<boolean>(false);
   const [isCitiesModalOpen, setIsCitiesModalOpen] = useState<boolean>(false);
+  const [isManageVendorsOpen, setIsManageVendorsOpen] = useState<boolean>(false);
+  const [vendors, setVendors] = useState<VendorRecord[]>(() => getLocalVendors());
 
   // Synchronize localStorage
   useEffect(() => {
@@ -322,6 +328,24 @@ export default function App() {
       },
       (err) => {
         console.warn('Live bookings sync notice:', err);
+      }
+    );
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // Real-time synchronization with Firestore Vendors Collection
+  useEffect(() => {
+    let isMounted = true;
+    const unsubscribe = subscribeToVendors(
+      (liveVendors) => {
+        if (!isMounted) return;
+        setVendors(liveVendors);
+      },
+      (err) => {
+        console.warn('Live vendors sync notice:', err);
       }
     );
     return () => {
@@ -520,12 +544,15 @@ export default function App() {
 
   const availableVendors = useMemo(() => {
     const set = new Set<string>();
+    vendors.forEach((v) => {
+      if (v.name) set.add(v.name);
+    });
     STANDARD_VENDORS.forEach((v) => set.add(v));
     assets.forEach((a) => {
       if (a.vendor) set.add(a.vendor);
     });
     return Array.from(set);
-  }, [assets]);
+  }, [vendors, assets]);
 
   const typeCounts = useMemo(() => {
     return assets.reduce((acc, a) => {
@@ -1012,6 +1039,7 @@ export default function App() {
         onOpenLoginModal={openLoginModal}
         onOpenBookingsModal={() => setIsBookingsModalOpen(true)}
         onOpenManageClients={() => setIsManageClientsOpen(true)}
+        onOpenManageVendors={() => setIsManageVendorsOpen(true)}
         onSignOut={handleSignOut}
         onSwitchRole={handleSwitchRole}
       />
@@ -1055,6 +1083,7 @@ export default function App() {
         onOpenLoginModal={openLoginModal}
         onOpenBookingsModal={() => setIsBookingsModalOpen(true)}
         onOpenManageClients={() => setIsManageClientsOpen(true)}
+        onOpenManageVendors={() => setIsManageVendorsOpen(true)}
         selectedCitiesCount={filters.selectedCities.length}
         onOpenCitiesModal={() => setIsCitiesModalOpen(true)}
       />
@@ -1074,6 +1103,7 @@ export default function App() {
             currency={currency}
             totalFilteredCount={filteredAssets.length}
             onOpenCitiesModal={() => setIsCitiesModalOpen(true)}
+            onOpenManageVendors={() => setIsManageVendorsOpen(true)}
           />
         )}
 
@@ -1176,6 +1206,7 @@ export default function App() {
         <NewAssetModal
           onClose={() => setIsNewAssetModalOpen(false)}
           onAddAsset={handleAddNewAsset}
+          availableVendors={availableVendors}
         />
       )}
 
@@ -1201,6 +1232,20 @@ export default function App() {
         <ManageClientsModal
           currentUser={currentUser}
           onClose={() => setIsManageClientsOpen(false)}
+        />
+      )}
+
+      {/* Operations Administrator Vendor & Concessionaire Management Console */}
+      {isManageVendorsOpen && (
+        <ManageVendorsModal
+          currentUser={currentUser}
+          vendors={vendors}
+          assets={assets}
+          onClose={() => setIsManageVendorsOpen(false)}
+          onVendorsUpdated={(updatedVendors) => setVendors(updatedVendors)}
+          onRefreshAssets={() => {
+            // Re-fetch assets if names changed
+          }}
         />
       )}
 
@@ -1240,6 +1285,7 @@ export default function App() {
           onSave={handleSaveEditedAsset}
           onDelete={handleRequestDeleteAsset}
           onClose={() => setEditingAsset(null)}
+          availableVendors={availableVendors}
         />
       )}
 

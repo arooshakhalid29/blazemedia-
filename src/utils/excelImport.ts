@@ -216,11 +216,14 @@ export function parseExcelToAssets(fileBuffer: ArrayBuffer | Uint8Array): Import
     const heightFt = Math.max(4, Number(getVal('Height (Ft)', 'Height', 'H', 'HeightFt')) || 20);
     const totalSqFt = widthFt * heightFt;
 
-    // Costs: Vendor Rate & Blaze Rate
+    // Costs: Vendor Rate & Blaze Rate consistent with approved Blaze rate list
     const rawBlazeRate = Number(getVal('Blaze Rate (PKR)', 'Blaze Rate', 'Monthly Rental (PKR)', 'Monthly Rental', 'Rental', 'Rate', 'Cost')) || 1200000;
     const rawVendorRate = Number(getVal('Vendor Rate (PKR)', 'Vendor Rate', 'Vendor Cost', 'Cost Rate')) || Math.round(rawBlazeRate * 0.7);
-    const blazeRatePkr = Math.max(50000, rawBlazeRate);
-    const vendorRatePkr = Math.max(50000, rawVendorRate);
+    let blazeRatePkr = Math.max(50000, rawBlazeRate);
+    const vendorRatePkr = Math.max(30000, rawVendorRate);
+    if (blazeRatePkr < vendorRatePkr) {
+      blazeRatePkr = Math.round(vendorRatePkr * 1.25);
+    }
     const monthlyRentalPkr = blazeRatePkr;
     const productionCostPkr = Number(getVal('Production Cost (PKR)', 'Production', 'Printing')) || Math.round(totalSqFt * 80);
     const mountingCostPkr = Number(getVal('Mounting Cost (PKR)', 'Mounting', 'Installation')) || 30000;

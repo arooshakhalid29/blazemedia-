@@ -21,6 +21,7 @@ import {
   UserPlus,
   Users,
   LogOut,
+  Building2,
 } from 'lucide-react';
 import { ViewMode, UserAccount, UserRole } from '../../types/mediaAsset';
 import { auth } from '../../services/firebase';
@@ -38,6 +39,7 @@ interface WindowsTitleBarProps {
   onOpenLoginModal: (mode?: 'client' | 'administrator' | 'signin') => void;
   onOpenBookingsModal: () => void;
   onOpenManageClients?: () => void;
+  onOpenManageVendors?: () => void;
   onSignOut?: () => void;
   onSwitchRole?: (role: UserRole) => void;
 }
@@ -55,6 +57,7 @@ export const WindowsTitleBar: React.FC<WindowsTitleBarProps> = ({
   onOpenLoginModal,
   onOpenBookingsModal,
   onOpenManageClients,
+  onOpenManageVendors,
   onSignOut,
   onSwitchRole,
 }) => {
@@ -187,6 +190,33 @@ export const WindowsTitleBar: React.FC<WindowsTitleBarProps> = ({
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">Ctrl+B</span>
                   </button>
+                  {isAdmin && onOpenManageVendors && (
+                    <button
+                      onClick={() => {
+                        closeMenu();
+                        onOpenManageVendors();
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-amber-500/20 hover:text-amber-300 flex items-center justify-between text-xs"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-amber-400" /> Manage Media Vendors...
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">Ctrl+M</span>
+                    </button>
+                  )}
+                  {isAdmin && onOpenManageClients && (
+                    <button
+                      onClick={() => {
+                        closeMenu();
+                        onOpenManageClients();
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-600/20 hover:text-blue-300 flex items-center justify-between text-xs"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Users className="w-3.5 h-3.5 text-blue-400" /> Manage Client Accounts...
+                      </span>
+                    </button>
+                  )}
                   <div className="h-px bg-slate-800 my-1" />
                   <button
                     onClick={() => {

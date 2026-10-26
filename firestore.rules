@@ -40,6 +40,12 @@ service cloud.firestore {
       allow write: if isValidId(bookingId);
     }
 
+    // Media Vendors & Concessionaires Master Directory
+    match /vendors/{vendorId} {
+      allow read: if true;
+      allow write: if isValidId(vendorId);
+    }
+
     // System Admins
     match /admins/{adminUid} {
       allow read, write: if true;

@@ -79,6 +79,7 @@ interface FilterDockProps {
   currency: Currency;
   totalFilteredCount: number;
   onOpenCitiesModal?: () => void;
+  onOpenManageVendors?: () => void;
 }
 
 export const FilterDock: React.FC<FilterDockProps> = ({
@@ -92,6 +93,7 @@ export const FilterDock: React.FC<FilterDockProps> = ({
   currency,
   totalFilteredCount,
   onOpenCitiesModal,
+  onOpenManageVendors,
 }) => {
   const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(false);
   const [citySearchQuery, setCitySearchQuery] = useState<string>('');
@@ -440,16 +442,27 @@ export const FilterDock: React.FC<FilterDockProps> = ({
 
         {/* Media Concessionaire / Vendor Filter */}
         <div>
-          <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-400 flex items-center justify-between mb-2">
-            <span className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400 flex items-center gap-1.5">
               <Building2 className="w-3 h-3 text-slate-400" /> Vendor Network
             </span>
-            {filters.selectedVendors.length > 0 && (
-              <span className="text-[10px] text-amber-400 font-mono">
-                {filters.selectedVendors.length} selected
-              </span>
-            )}
-          </label>
+            <div className="flex items-center gap-2">
+              {onOpenManageVendors && (
+                <button
+                  onClick={onOpenManageVendors}
+                  className="text-[10px] text-amber-400 hover:text-amber-300 underline font-medium cursor-pointer"
+                  title="Manage Vendor Directory (Add, Edit, Delete)"
+                >
+                  Manage
+                </button>
+              )}
+              {filters.selectedVendors.length > 0 && (
+                <span className="text-[10px] text-amber-400 font-mono">
+                  {filters.selectedVendors.length} selected
+                </span>
+              )}
+            </div>
+          </div>
           <div className="space-y-1">
             {availableVendors.map((vendor) => {
               const checked = filters.selectedVendors.includes(vendor);

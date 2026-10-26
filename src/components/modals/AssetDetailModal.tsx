@@ -441,14 +441,10 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                     <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">
                       Commercial Tariff & Pricing Structure
                     </span>
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                      marginPkr >= 0
-                        ? 'bg-emerald-950/70 text-emerald-400 border-emerald-800/60'
-                        : 'bg-red-950/70 text-red-400 border-red-800/60'
-                    }`}>
-                      {marginPkr >= 0
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded border bg-emerald-950/70 text-emerald-400 border-emerald-800/60">
+                      {marginPkr > 0
                         ? `Agency Margin: ₨ ${marginPkr.toLocaleString('en-PK')} (+${marginPercent}%)`
-                        : `Deficit: -₨ ${Math.abs(marginPkr).toLocaleString('en-PK')}`
+                        : `Approved Rate Card: Parity`
                       }
                     </span>
                   </div>
@@ -474,19 +470,19 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                         {formatFullCurrency(blazeRate, currency)}
                       </span>
                       <span className="text-[10px] text-slate-500 block mt-0.5">
-                        Client quotation rental / month
+                        Approved Blaze Rate Card / month
                       </span>
                     </div>
 
                     <div className="p-3 bg-slate-900/80 rounded border border-slate-800">
                       <span className="text-slate-400 text-[10px] uppercase font-semibold block mb-0.5">
-                        Gross Spread
+                        Commercial Spread
                       </span>
-                      <span className={`font-mono text-base font-bold ${marginPkr >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        ₨ {marginPkr.toLocaleString('en-PK')}
+                      <span className="font-mono text-base font-bold text-emerald-400">
+                        ₨ {Math.max(0, marginPkr).toLocaleString('en-PK')}
                       </span>
                       <span className="text-[10px] text-slate-500 block mt-0.5">
-                        {marginPercent}% agency retained margin
+                        {Math.max(0, marginPercent)}% agency retained spread
                       </span>
                     </div>
                   </div>

@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   User,
   Users,
+  Building2,
 } from 'lucide-react';
 import { ViewMode, Currency, UserAccount } from '../../types/mediaAsset';
 
@@ -43,6 +44,7 @@ interface DesktopRibbonProps {
   onOpenLoginModal: (mode?: 'client' | 'administrator' | 'signin') => void;
   onOpenBookingsModal: () => void;
   onOpenManageClients?: () => void;
+  onOpenManageVendors?: () => void;
   selectedCitiesCount?: number;
   onOpenCitiesModal?: () => void;
 }
@@ -69,6 +71,7 @@ export const DesktopRibbon: React.FC<DesktopRibbonProps> = ({
   onOpenLoginModal,
   onOpenBookingsModal,
   onOpenManageClients,
+  onOpenManageVendors,
   selectedCitiesCount = 0,
   onOpenCitiesModal,
 }) => {
@@ -246,7 +249,19 @@ export const DesktopRibbon: React.FC<DesktopRibbonProps> = ({
             title="Manage client accounts, assign organizations, and issue login credentials (admin@blaze.com.pk only)"
           >
             <Users className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden sm:inline">Manage Clients</span>
+            <span className="hidden sm:inline">Clients</span>
+          </button>
+        )}
+
+        {/* Manage Vendors - Admin Only */}
+        {isAdmin && onOpenManageVendors && (
+          <button
+            onClick={onOpenManageVendors}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 border border-amber-600/50 rounded transition-colors font-medium shadow-xs cursor-pointer"
+            title="Manage Media Vendors & Concessionaires (Add, Edit, Delete)"
+          >
+            <Building2 className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Vendors</span>
           </button>
         )}
 

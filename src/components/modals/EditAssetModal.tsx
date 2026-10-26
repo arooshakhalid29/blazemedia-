@@ -21,6 +21,7 @@ interface EditAssetModalProps {
   onSave: (updated: MediaAsset) => void;
   onDelete?: (asset: MediaAsset) => void;
   onClose: () => void;
+  availableVendors?: string[];
 }
 
 export const EditAssetModal: React.FC<EditAssetModalProps> = ({
@@ -28,7 +29,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   onSave,
   onDelete,
   onClose,
+  availableVendors,
 }) => {
+  const vendorList = availableVendors && availableVendors.length > 0 ? availableVendors : Array.from(STANDARD_VENDORS);
   const [title, setTitle] = useState(asset.title);
   const [vendor, setVendor] = useState(asset.vendor || 'Blaze Media (Pvt) Ltd');
   const [city, setCity] = useState<City>(asset.city);
@@ -37,10 +40,10 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const [widthFt, setWidthFt] = useState(asset.dimensions.widthFt);
   const [heightFt, setHeightFt] = useState(asset.dimensions.heightFt);
   const [illumination, setIllumination] = useState<IlluminationType>(asset.illumination);
-  const [vendorRatePkr, setVendorRatePkr] = useState(
+  const [vendorRatePkr, setVendorRatePkr] = useState<number | ''>(
     asset.cost.vendorRatePkr ?? Math.round(asset.cost.monthlyRentalPkr * 0.7)
   );
-  const [blazeRatePkr, setBlazeRatePkr] = useState(
+  const [blazeRatePkr, setBlazeRatePkr] = useState<number | ''>(
     asset.cost.blazeRatePkr ?? asset.cost.monthlyRentalPkr
   );
   const [status, setStatus] = useState<AssetStatus>(asset.status);
@@ -53,13 +56,30 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
   const [galleryImages, setGalleryImages] = useState<string[]>(
     asset.galleryImages || [asset.imageUrl]
   );
+  const [error, setError] = useState<string>('');
 
   const handleCityChange = (newCity: City) => {
     setCity(newCity);
   };
 
+  const handleVendorRateChange = (val: string) => {
+    setVendorRatePkr(val === '' ? '' : Number(val));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (vendorRatePkr === '' || Number(vendorRatePkr) <= 0) {
+      setError('Vendor Rate is required. Please manually enter the vendor cost rate.');
+      return;
+    }
+    if (blazeRatePkr === '' || Number(blazeRatePkr) <= 0) {
+      setError('Blaze Rate is required. Please manually enter the official Blaze card rate.');
+      return;
+    }
+    if (Number(blazeRatePkr) < Number(vendorRatePkr)) {
+      setError('Blaze Rate must be at least equal to or higher than Vendor Cost Rate per the approved Blaze rate list.');
+      return;
+    }
 
     const cityMeta = getPakistanCityMeta(city);
     // If city changed from original, update coordinates
@@ -86,9 +106,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
       illumination,
       cost: {
         ...asset.cost,
-        monthlyRentalPkr: blazeRatePkr,
-        vendorRatePkr,
-        blazeRatePkr,
+        monthlyRentalPkr: Number(blazeRatePkr),
+        vendorRatePkr: Number(vendorRatePkr),
+        blazeRatePkr: Number(blazeRatePkr),
         taxRatePercent: cityMeta.taxRatePercent || asset.cost.taxRatePercent,
       },
       status,
@@ -160,7 +180,7 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 onChange={(e) => setVendor(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200"
               >
-                {STANDARD_VENDORS.map((v) => (
+                {vendorList.map((v) => (
                   <option key={v} value={v}>
                     {v}
                   </option>
@@ -290,21 +310,24 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                 Commercial Rates (Required)
               </span>
-              {blazeRatePkr > 0 && vendorRatePkr > 0 && (
+              {typeof blazeRatePkr === 'number' && typeof vendorRatePkr === 'number' && blazeRatePkr > 0 && vendorRatePkr > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                    blazeRatePkr >= vendorRatePkr
-                      ? 'bg-emerald-950/70 text-emerald-400 border-emerald-800/60'
-                      : 'bg-red-950/70 text-red-400 border-red-800/60'
-                  }`}>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border bg-emerald-950/70 text-emerald-400 border-emerald-800/60">
                     {blazeRatePkr >= vendorRatePkr
-                      ? `Margin: ₨ ${(blazeRatePkr - vendorRatePkr).toLocaleString('en-PK')} (+${Math.round(((blazeRatePkr - vendorRatePkr) / blazeRatePkr) * 100)}%)`
-                      : `Deficit: -₨ ${(vendorRatePkr - blazeRatePkr).toLocaleString('en-PK')}`
+                      ? `Approved Margin: ₨ ${(blazeRatePkr - vendorRatePkr).toLocaleString('en-PK')} (+${Math.round(((blazeRatePkr - vendorRatePkr) / blazeRatePkr) * 100)}%)`
+                      : 'Approved Rate Card Standard'
                     }
                   </span>
                 </div>
               )}
             </div>
+
+            {error && (
+              <div className="p-2.5 rounded bg-red-950/80 border border-red-800/80 text-red-300 text-xs flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                <span>{error}</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -320,8 +343,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     required
                     step={10000}
                     min={10000}
-                    value={vendorRatePkr || ''}
-                    onChange={(e) => setVendorRatePkr(Number(e.target.value))}
+                    placeholder=""
+                    value={vendorRatePkr === '' ? '' : vendorRatePkr}
+                    onChange={(e) => handleVendorRateChange(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700/80 rounded pl-7 pr-3 py-1.5 text-xs text-slate-100 font-mono focus:outline-hidden focus:border-amber-500"
                   />
                 </div>
@@ -343,8 +367,9 @@ export const EditAssetModal: React.FC<EditAssetModalProps> = ({
                     required
                     step={10000}
                     min={10000}
-                    value={blazeRatePkr || ''}
-                    onChange={(e) => setBlazeRatePkr(Number(e.target.value))}
+                    placeholder=""
+                    value={blazeRatePkr === '' ? '' : blazeRatePkr}
+                    onChange={(e) => setBlazeRatePkr(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-slate-900 border border-slate-700/80 rounded pl-7 pr-3 py-1.5 text-xs text-amber-400 font-mono font-bold focus:outline-hidden focus:border-amber-500"
                   />
                 </div>

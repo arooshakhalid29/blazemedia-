@@ -23,22 +23,25 @@ import { AssetImageUploader } from '../common/AssetImageUploader';
 interface NewAssetModalProps {
   onClose: () => void;
   onAddAsset: (asset: MediaAsset) => void;
+  availableVendors?: string[];
 }
 
 export const NewAssetModal: React.FC<NewAssetModalProps> = ({
   onClose,
   onAddAsset,
+  availableVendors,
 }) => {
+  const vendorList = availableVendors && availableVendors.length > 0 ? availableVendors : Array.from(STANDARD_VENDORS);
   const [city, setCity] = useState<City>('Karachi');
-  const [vendor, setVendor] = useState<string>('Blaze Media (Pvt) Ltd');
+  const [vendor, setVendor] = useState<string>(vendorList[0] || 'Blaze Media (Pvt) Ltd');
   const [type, setType] = useState<MediaType>('Billboard');
   const [title, setTitle] = useState<string>('');
   const [area, setArea] = useState<string>('');
   const [widthFt, setWidthFt] = useState<number>(60);
   const [heightFt, setHeightFt] = useState<number>(20);
   const [illumination, setIllumination] = useState<IlluminationType>('Frontlit');
-  const [vendorRatePkr, setVendorRatePkr] = useState<number>(1000000);
-  const [blazeRatePkr, setBlazeRatePkr] = useState<number>(1500000);
+  const [vendorRatePkr, setVendorRatePkr] = useState<number | ''>('');
+  const [blazeRatePkr, setBlazeRatePkr] = useState<number | ''>('');
   const [secCategory, setSecCategory] = useState<SECCategory>('A');
   const [dailyTrafficVehicles, setDailyTrafficVehicles] = useState<number>(250000);
   const [status, setStatus] = useState<AssetStatus>('Available');
@@ -55,18 +58,26 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
     setCity(newCity);
   };
 
+  const handleVendorRateChange = (val: string) => {
+    setVendorRatePkr(val === '' ? '' : Number(val));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !area.trim()) {
       setError('Please provide a title and location area landmark.');
       return;
     }
-    if (!vendorRatePkr || vendorRatePkr <= 0) {
-      setError('Vendor Rate is required and must be greater than 0 PKR.');
+    if (vendorRatePkr === '' || Number(vendorRatePkr) <= 0) {
+      setError('Vendor Rate is required. Please manually enter the vendor cost rate.');
       return;
     }
-    if (!blazeRatePkr || blazeRatePkr <= 0) {
-      setError('Blaze Rate is required and must be greater than 0 PKR.');
+    if (blazeRatePkr === '' || Number(blazeRatePkr) <= 0) {
+      setError('Blaze Rate is required. Please manually enter the official Blaze card rate.');
+      return;
+    }
+    if (Number(blazeRatePkr) < Number(vendorRatePkr)) {
+      setError('Blaze Rate must be at least equal to or higher than Vendor Cost Rate per the approved Blaze rate list.');
       return;
     }
 
@@ -116,9 +127,9 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
       sides: 2,
       illumination,
       cost: {
-        monthlyRentalPkr: blazeRatePkr,
-        vendorRatePkr,
-        blazeRatePkr,
+        monthlyRentalPkr: Number(blazeRatePkr),
+        vendorRatePkr: Number(vendorRatePkr),
+        blazeRatePkr: Number(blazeRatePkr),
         productionCostPkr: Math.round(widthFt * heightFt * 80),
         mountingCostPkr: 30000,
         taxRatePercent: cityMeta.taxRatePercent || (cityMeta.province === 'Sindh' ? 13 : 16),
@@ -196,7 +207,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                 onChange={(e) => setVendor(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-amber-500"
               >
-                {STANDARD_VENDORS.map((v) => (
+                {vendorList.map((v) => (
                   <option key={v} value={v}>
                     {v}
                   </option>
@@ -348,16 +359,12 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                 Commercial Rates (Required)
               </span>
-              {blazeRatePkr > 0 && vendorRatePkr > 0 && (
+              {typeof blazeRatePkr === 'number' && typeof vendorRatePkr === 'number' && blazeRatePkr > 0 && vendorRatePkr > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                    blazeRatePkr >= vendorRatePkr
-                      ? 'bg-emerald-950/70 text-emerald-400 border-emerald-800/60'
-                      : 'bg-red-950/70 text-red-400 border-red-800/60'
-                  }`}>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border bg-emerald-950/70 text-emerald-400 border-emerald-800/60">
                     {blazeRatePkr >= vendorRatePkr
-                      ? `Margin: ₨ ${(blazeRatePkr - vendorRatePkr).toLocaleString('en-PK')} (+${Math.round(((blazeRatePkr - vendorRatePkr) / blazeRatePkr) * 100)}%)`
-                      : `Deficit: -₨ ${(vendorRatePkr - blazeRatePkr).toLocaleString('en-PK')}`
+                      ? `Approved Margin: ₨ ${(blazeRatePkr - vendorRatePkr).toLocaleString('en-PK')} (+${Math.round(((blazeRatePkr - vendorRatePkr) / blazeRatePkr) * 100)}%)`
+                      : 'Approved Rate Card Standard'
                     }
                   </span>
                 </div>
@@ -378,9 +385,9 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                     required
                     step={10000}
                     min={10000}
-                    placeholder="e.g. 1000000"
-                    value={vendorRatePkr || ''}
-                    onChange={(e) => setVendorRatePkr(Number(e.target.value))}
+                    placeholder=""
+                    value={vendorRatePkr === '' ? '' : vendorRatePkr}
+                    onChange={(e) => handleVendorRateChange(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700/80 rounded pl-7 pr-3 py-1.5 text-xs text-slate-100 font-mono focus:outline-hidden focus:border-amber-500"
                   />
                 </div>
@@ -402,9 +409,9 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                     required
                     step={10000}
                     min={10000}
-                    placeholder="e.g. 1500000"
-                    value={blazeRatePkr || ''}
-                    onChange={(e) => setBlazeRatePkr(Number(e.target.value))}
+                    placeholder=""
+                    value={blazeRatePkr === '' ? '' : blazeRatePkr}
+                    onChange={(e) => setBlazeRatePkr(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-slate-900 border border-slate-700/80 rounded pl-7 pr-3 py-1.5 text-xs text-amber-400 font-mono font-bold focus:outline-hidden focus:border-amber-500"
                   />
                 </div>
