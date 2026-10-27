@@ -817,7 +817,6 @@ export function subscribeToMediaAssets(
     (error) => {
       console.warn('Real-time assets sync notice:', error.message);
       if (onError) onError(error);
-      handleFirestoreError(error, OperationType.LIST, 'mediaAssets');
     }
   );
 }
@@ -1168,18 +1167,7 @@ export async function purgeLegacyDummyData(): Promise<void> {
       const docId = docSnap.id;
       const isLegacyMock =
         legacyDummyAssetIds.includes(docId) ||
-        legacyDummyAssetIds.includes(data?.code) ||
-        data?.isUserCreated !== true ||
-        docId.startsWith('BLZ-BLZ-') ||
-        docId.startsWith('BLZ-KHI-010') ||
-        docId.startsWith('BLZ-LHE-020') ||
-        docId.startsWith('BLZ-ISB-030') ||
-        docId.startsWith('BLZ-RWP-040') ||
-        docId.startsWith('BLZ-FSD-050') ||
-        docId.startsWith('BLZ-MUX-060') ||
-        docId.startsWith('BLZ-PEW-070') ||
-        docId.startsWith('BLZ-UET-080') ||
-        docId.startsWith('BLZ-GWD-090');
+        legacyDummyAssetIds.includes(data?.code);
 
       if (isLegacyMock) {
         try {
@@ -1197,7 +1185,7 @@ export async function purgeLegacyDummyData(): Promise<void> {
       localStorage.getItem('blaze_ooh_admin_assets') || '[]'
     );
     const cleanedAssets = localAssets.filter(
-      (a) => !legacyDummyAssetIds.includes(a.id) && (a as any).isUserCreated === true
+      (a) => !legacyDummyAssetIds.includes(a.id) && !legacyDummyAssetIds.includes(a.code)
     );
     localStorage.setItem('blaze_ooh_admin_assets', JSON.stringify(cleanedAssets));
 

@@ -86,8 +86,7 @@ export default function App() {
         return parsed.filter(
           (a) =>
             !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
-            !LEGACY_DUMMY_ASSET_IDS.includes(a.code) &&
-            (a as any).isUserCreated === true
+            !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
         );
       }
     } catch {}
@@ -224,14 +223,17 @@ export default function App() {
           const cleanServerAssets: MediaAsset[] = data.assets.filter(
             (a: MediaAsset) =>
               !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
-              !LEGACY_DUMMY_ASSET_IDS.includes(a.code) &&
-              (a as any).isUserCreated === true
+              !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
           );
           if (cleanServerAssets.length > 0) {
             setAssets((prev) => {
               const map = new Map<string, MediaAsset>();
               cleanServerAssets.forEach((a) => map.set(a.id, a));
-              prev.forEach((a) => map.set(a.id, a));
+              prev.forEach((a) => {
+                if (!map.has(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.code)) {
+                  map.set(a.id, a);
+                }
+              });
               return Array.from(map.values());
             });
           }
@@ -294,13 +296,24 @@ export default function App() {
         const cleanAssets = liveAssets.filter(
           (a) =>
             !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
-            !LEGACY_DUMMY_ASSET_IDS.includes(a.code) &&
-            (a as any).isUserCreated === true
+            !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
         );
-        setAssets(cleanAssets);
-        try {
-          localStorage.setItem('blaze_ooh_admin_assets', JSON.stringify(cleanAssets));
-        } catch {}
+        setAssets((prev) => {
+          const map = new Map<string, MediaAsset>();
+          // live assets take precedence
+          cleanAssets.forEach((a) => map.set(a.id, a));
+          // keep newly created local items that haven't synced yet
+          prev.forEach((a) => {
+            if (!map.has(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.code)) {
+              map.set(a.id, a);
+            }
+          });
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem('blaze_ooh_admin_assets', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
       },
       (err) => {
         console.warn('Live assets sync notice:', err);

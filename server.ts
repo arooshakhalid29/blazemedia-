@@ -27,8 +27,47 @@ const isProduction = process.env.NODE_ENV === 'production';
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// In-memory media asset inventory state (synchronized with live client requests)
+// Persistent media asset inventory state (synchronized with live client requests and Firestore)
+const ASSETS_STORAGE_PATH = path.resolve('assets_store.json');
 let serverAssetStore: any[] = [];
+
+try {
+  if (fs.existsSync(ASSETS_STORAGE_PATH)) {
+    const raw = fs.readFileSync(ASSETS_STORAGE_PATH, 'utf-8');
+    serverAssetStore = JSON.parse(raw);
+    console.log(`[Blaze Assets] Loaded ${serverAssetStore.length} asset(s) from persistent store.`);
+  }
+} catch (e) {
+  console.warn('Notice reading asset storage file:', e);
+}
+
+function saveAssetStore() {
+  try {
+    fs.writeFileSync(ASSETS_STORAGE_PATH, JSON.stringify(serverAssetStore, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('Notice saving asset storage file:', e);
+  }
+}
+
+async function syncAssetsFromFirestore() {
+  try {
+    const snap = await getDocs(collection(serverDb, 'mediaAssets'));
+    if (!snap.empty) {
+      const map = new Map<string, any>();
+      serverAssetStore.forEach((a) => map.set(a.id, a));
+      snap.forEach((d) => {
+        const data = d.data();
+        map.set(d.id, { ...data, id: d.id });
+      });
+      serverAssetStore = Array.from(map.values());
+      saveAssetStore();
+      console.log(`[Blaze Assets] Synced ${serverAssetStore.length} asset(s) with Firestore.`);
+    }
+  } catch (err: any) {
+    console.warn('Notice syncing assets from Firestore:', err.message);
+  }
+}
+syncAssetsFromFirestore();
 
 // API Status & Deployment Info
 app.get('/api/status', (req: Request, res: Response) => {
@@ -225,6 +264,7 @@ app.post('/api/assets', (req: Request, res: Response) => {
   } else {
     serverAssetStore.unshift({ ...asset, id: assetId });
   }
+  saveAssetStore();
   res.json({ success: true, asset: { ...asset, id: assetId } });
 });
 
@@ -246,6 +286,7 @@ app.delete('/api/assets/:id', (req: Request, res: Response) => {
       a.id !== `BLZ-${targetId}` &&
       a.id !== `BLZ-${normalizedId}`
   );
+  saveAssetStore();
   res.json({
     success: true,
     message: `Asset ${targetId} permanently deleted from database.`,
@@ -280,6 +321,7 @@ app.post('/api/assets/batch-save', (req: Request, res: Response) => {
   }
 
   serverAssetStore = [...assets, ...serverAssetStore];
+  saveAssetStore();
   res.json({
     success: true,
     addedCount: assets.length,

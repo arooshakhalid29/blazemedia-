@@ -69,15 +69,15 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
       return;
     }
     if (vendorRatePkr === '' || Number(vendorRatePkr) <= 0) {
-      setError('Vendor Rate is required. Please manually enter the vendor cost rate.');
+      setError('Vendor Rate is required. Please manually enter a positive vendor cost rate.');
       return;
     }
     if (blazeRatePkr === '' || Number(blazeRatePkr) <= 0) {
-      setError('Blaze Rate is required. Please manually enter the official Blaze card rate.');
+      setError('Blaze Rate is required. Please manually enter a positive Blaze rate.');
       return;
     }
-    if (Number(blazeRatePkr) < Number(vendorRatePkr)) {
-      setError('Blaze Rate must be at least equal to or higher than Vendor Cost Rate per the approved Blaze rate list.');
+    if (Number(blazeRatePkr) >= Number(vendorRatePkr)) {
+      setError('Rate Error: Blaze rate must always be lower than the vendor rate. Please adjust the rates before saving.');
       return;
     }
 
@@ -361,11 +361,16 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
               </span>
               {typeof blazeRatePkr === 'number' && typeof vendorRatePkr === 'number' && blazeRatePkr > 0 && vendorRatePkr > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border bg-emerald-950/70 text-emerald-400 border-emerald-800/60">
-                    {blazeRatePkr >= vendorRatePkr
-                      ? `Approved Margin: ₨ ${(blazeRatePkr - vendorRatePkr).toLocaleString('en-PK')} (+${Math.round(((blazeRatePkr - vendorRatePkr) / blazeRatePkr) * 100)}%)`
-                      : 'Approved Rate Card Standard'
-                    }
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                      blazeRatePkr < vendorRatePkr
+                        ? 'bg-emerald-950/70 text-emerald-400 border-emerald-800/60'
+                        : 'bg-red-950/70 text-red-400 border-red-800/60'
+                    }`}
+                  >
+                    {blazeRatePkr < vendorRatePkr
+                      ? `Valid Rate Structure: Blaze (₨ ${blazeRatePkr.toLocaleString('en-PK')}) < Vendor (₨ ${vendorRatePkr.toLocaleString('en-PK')})`
+                      : 'Error: Blaze Rate must be strictly lower than Vendor Rate'}
                   </span>
                 </div>
               )}
@@ -383,8 +388,8 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                   <input
                     type="number"
                     required
-                    step={10000}
-                    min={10000}
+                    step="any"
+                    min={1}
                     placeholder=""
                     value={vendorRatePkr === '' ? '' : vendorRatePkr}
                     onChange={(e) => handleVendorRateChange(e.target.value)}
@@ -407,8 +412,8 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                   <input
                     type="number"
                     required
-                    step={10000}
-                    min={10000}
+                    step="any"
+                    min={1}
                     placeholder=""
                     value={blazeRatePkr === '' ? '' : blazeRatePkr}
                     onChange={(e) => setBlazeRatePkr(e.target.value === '' ? '' : Number(e.target.value))}
@@ -416,7 +421,7 @@ export const NewAssetModal: React.FC<NewAssetModalProps> = ({
                   />
                 </div>
                 <span className="text-[10px] text-slate-500 mt-0.5 block">
-                  Official client rate card quotation (Monthly Rental)
+                  Must always be lower than Vendor Rate
                 </span>
               </div>
             </div>
