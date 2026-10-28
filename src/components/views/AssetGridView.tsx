@@ -165,19 +165,19 @@ export const AssetGridView: React.FC<AssetGridViewProps> = ({
                   <div>
                     <span className="text-slate-500 block">Dimensions</span>
                     <span className="font-mono text-slate-200 font-semibold">
-                      {asset.dimensions.widthFt}×{asset.dimensions.heightFt} ft
+                      {asset.dimensions?.widthFt ?? 0}×{asset.dimensions?.heightFt ?? 0} ft
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-500 block">Daily Traffic</span>
                     <span className="font-mono text-slate-200 font-semibold">
-                      {formatNumberCompact(asset.profiling.dailyTrafficVehicles)}/day
+                      {formatNumberCompact(asset.profiling?.dailyTrafficVehicles ?? 0)}/day
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-500 block">Audience SEC</span>
                     <span className="font-mono text-amber-400 font-bold">
-                      Class {asset.profiling.secCategory}
+                      Class {asset.profiling?.secCategory || 'A'}
                     </span>
                   </div>
                 </div>

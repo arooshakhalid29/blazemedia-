@@ -176,7 +176,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                         }`}
                       />
                       <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-xs px-2.5 py-1 rounded text-xs font-mono text-amber-400 border border-slate-700">
-                        {asset.type} · {asset.dimensions.widthFt} × {asset.dimensions.heightFt} ft ({asset.dimensions.totalSqFt} sqft)
+                        {asset.type} · {asset.dimensions?.widthFt ?? 0} × {asset.dimensions?.heightFt ?? 0} ft ({asset.dimensions?.totalSqFt ?? 0} sqft)
                       </div>
 
                       <button

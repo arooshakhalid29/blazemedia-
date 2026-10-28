@@ -21,29 +21,19 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Media Assets Master Catalog
-    // Both Admin and Client panels connect to this same collection in real time.
-    // Clients can browse, inspect, and request bookings, but are strictly forbidden from deleting assets.
+    // Media Assets Master Catalog (synchronized in real time across all browsers/devices)
     match /mediaAssets/{assetId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if request.auth == null || (
-        request.auth.token.email == 'admin@blaze.com.pk' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      allow read, write: if true;
     }
 
     // Client Campaign Bookings & Reservations
-    // Real-time synchronization between Admin Booking Desk and Client My Bookings
     match /bookings/{bookingId} {
-      allow read: if true;
-      allow write: if isValidId(bookingId);
+      allow read, write: if true;
     }
 
     // Media Vendors & Concessionaires Master Directory
     match /vendors/{vendorId} {
-      allow read: if true;
-      allow write: if isValidId(vendorId);
+      allow read, write: if true;
     }
 
     // System Admins

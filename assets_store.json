@@ -1,0 +1,256 @@
+[
+  {
+    "id": "BLZ-KAR-BLB-162",
+    "code": "KAR-BLB-162",
+    "title": "Shahrah-e-Faisal Baloch Colony Flyover Billboard",
+    "vendor": "Blaze Media (Pvt) Ltd",
+    "city": "Karachi",
+    "area": "Shahrah-e-Faisal / Baloch Colony",
+    "zone": "District East",
+    "type": "Billboard",
+    "dimensions": {
+      "widthFt": 60,
+      "heightFt": 20,
+      "totalSqFt": 1200
+    },
+    "orientation": "Landscape",
+    "sides": 1,
+    "illumination": "Frontlit",
+    "cost": {
+      "monthlyRentalPkr": 1500000,
+      "blazeRatePkr": 1500000,
+      "vendorRatePkr": 1800000,
+      "productionCostPkr": 85000,
+      "mountingCostPkr": 30000,
+      "taxRatePercent": 13
+    },
+    "profiling": {
+      "secCategory": "A+",
+      "dailyTrafficVehicles": 320000,
+      "dailyGrossImpressions": 480000,
+      "dwellTimeSec": 60,
+      "viewingDistanceMeters": 400,
+      "trafficDirection": "Shahrah-e-Faisal toward Metropole & Saddar CBD",
+      "targetDemographics": [
+        "Corporate Executives",
+        "Business Travellers",
+        "Affluent Commuters"
+      ],
+      "clutterLevel": "Low (Solo Prime)",
+      "peakCongestionHours": "08:00 AM - 11:30 AM & 05:30 PM - 09:30 PM",
+      "surroundingLandmarks": [
+        "Baloch Colony Flyover",
+        "Awami Markaz",
+        "Karsaz Intersection"
+      ]
+    },
+    "coordinates": {
+      "lat": 24.8671,
+      "lng": 67.0782
+    },
+    "authorityNoc": "CBC",
+    "status": "Occupied",
+    "currentBrandOccupant": "Standard Chartered Priority Banking",
+    "imageUrl": "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80",
+    "techSpecs": {
+      "structureType": "Heavy Duty Steel Truss Billboard",
+      "generatorBackup": true,
+      "foundationType": "Reinforced Concrete Pile Footing"
+    },
+    "notes": "Prime commercial arterial corridor with high daily vehicular traffic.",
+    "isUserCreated": true,
+    "createdAt": "2026-10-21T07:00:00.000Z",
+    "updatedAt": "2026-10-28T09:09:20.911Z"
+  },
+  {
+    "id": "BLZ-KAR-BLB-352",
+    "code": "KAR-BLB-352",
+    "title": "Clifton Do Talwar Mega Roundabout Billboard",
+    "vendor": "Dawn Outdoor Media",
+    "city": "Karachi",
+    "area": "Clifton / Do Talwar",
+    "zone": "District South / Clifton",
+    "type": "Billboard",
+    "dimensions": {
+      "widthFt": 45,
+      "heightFt": 15,
+      "totalSqFt": 675
+    },
+    "orientation": "Landscape",
+    "sides": 1,
+    "illumination": "Frontlit",
+    "cost": {
+      "monthlyRentalPkr": 1200000,
+      "blazeRatePkr": 1200000,
+      "vendorRatePkr": 1450000,
+      "productionCostPkr": 65000,
+      "mountingCostPkr": 25000,
+      "taxRatePercent": 13
+    },
+    "profiling": {
+      "secCategory": "A+",
+      "dailyTrafficVehicles": 280000,
+      "dailyGrossImpressions": 420000,
+      "dwellTimeSec": 75,
+      "viewingDistanceMeters": 300,
+      "trafficDirection": "Facing Do Talwar roundabout traffic from Clifton Bridge toward Teen Talwar",
+      "targetDemographics": [
+        "High Net Worth Individuals",
+        "Youth & Fashion Shoppers",
+        "Diplomats"
+      ],
+      "clutterLevel": "Low (Solo Prime)",
+      "peakCongestionHours": "09:00 AM - 12:00 PM & 06:00 PM - 11:00 PM",
+      "surroundingLandmarks": [
+        "Do Talwar Monument",
+        "Ocean Mall",
+        "Emerald Tower"
+      ]
+    },
+    "coordinates": {
+      "lat": 24.8239,
+      "lng": 67.0312
+    },
+    "authorityNoc": "CBC",
+    "status": "Available",
+    "imageUrl": "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80",
+    "techSpecs": {
+      "structureType": "Heavy Duty Structural Steel Billboard",
+      "generatorBackup": true,
+      "foundationType": "Mass Concrete Base"
+    },
+    "notes": "Premium commercial and lifestyle epicenter in Clifton.",
+    "isUserCreated": true,
+    "createdAt": "2026-10-21T07:00:00.000Z",
+    "updatedAt": "2026-10-28T09:09:20.911Z"
+  },
+  {
+    "id": "BLZ-KAR-BLB-366",
+    "code": "KAR-BLB-366",
+    "title": "Shahrah-e-Faisal Nursery Flyover Prime Billboard",
+    "vendor": "Blaze Media (Pvt) Ltd",
+    "city": "Karachi",
+    "area": "Shahrah-e-Faisal / Nursery",
+    "zone": "District East",
+    "type": "Billboard",
+    "dimensions": {
+      "widthFt": 50,
+      "heightFt": 20,
+      "totalSqFt": 1000
+    },
+    "orientation": "Landscape",
+    "sides": 1,
+    "illumination": "Frontlit",
+    "cost": {
+      "monthlyRentalPkr": 1400000,
+      "blazeRatePkr": 1400000,
+      "vendorRatePkr": 1700000,
+      "productionCostPkr": 70000,
+      "mountingCostPkr": 28000,
+      "taxRatePercent": 13
+    },
+    "profiling": {
+      "secCategory": "A",
+      "dailyTrafficVehicles": 310000,
+      "dailyGrossImpressions": 465000,
+      "dwellTimeSec": 55,
+      "viewingDistanceMeters": 380,
+      "trafficDirection": "Shahrah-e-Faisal city-bound toward Finance & Trade Centre (FTC)",
+      "targetDemographics": [
+        "Financial Sector Professionals",
+        "Corporate Commuters"
+      ],
+      "clutterLevel": "Moderate",
+      "peakCongestionHours": "08:30 AM - 11:30 AM & 05:00 PM - 09:00 PM",
+      "surroundingLandmarks": [
+        "Nursery Furniture Market",
+        "PECHS Block 6",
+        "FTC Building"
+      ]
+    },
+    "coordinates": {
+      "lat": 24.8615,
+      "lng": 67.0628
+    },
+    "authorityNoc": "CBC",
+    "status": "Available",
+    "imageUrl": "https://images.unsplash.com/photo-1572945550744-57049dcbc1b3?auto=format&fit=crop&w=1200&q=80",
+    "techSpecs": {
+      "structureType": "Cantilever Steel Frame",
+      "generatorBackup": true,
+      "foundationType": "Deep Bored Pile"
+    },
+    "notes": "High visibility city-bound arterial site facing dense morning and evening peak traffic.",
+    "isUserCreated": true,
+    "createdAt": "2026-10-21T07:00:00.000Z",
+    "updatedAt": "2026-10-28T09:09:20.911Z"
+  },
+  {
+    "id": "BLZ-ISB-SMD-410",
+    "code": "ISB-SMD-410",
+    "title": "Blue Area Jinnah Avenue Mega Digital SMD Display",
+    "vendor": "Dynamic Display DOOH",
+    "city": "Islamabad",
+    "area": "Blue Area / Jinnah Avenue",
+    "zone": "Sector G-7 / F-7 Commercial",
+    "type": "Digital SMD Screen",
+    "dimensions": {
+      "widthFt": 40,
+      "heightFt": 20,
+      "totalSqFt": 800
+    },
+    "orientation": "Landscape",
+    "sides": 1,
+    "illumination": "Digital SMD",
+    "cost": {
+      "monthlyRentalPkr": 2200000,
+      "blazeRatePkr": 2200000,
+      "vendorRatePkr": 2600000,
+      "productionCostPkr": 15000,
+      "mountingCostPkr": 0,
+      "taxRatePercent": 16,
+      "digitalSlotSec": 15,
+      "spotsPerDay": 240
+    },
+    "profiling": {
+      "secCategory": "A+",
+      "dailyTrafficVehicles": 250000,
+      "dailyGrossImpressions": 400000,
+      "dwellTimeSec": 80,
+      "viewingDistanceMeters": 350,
+      "trafficDirection": "Jinnah Avenue toward Kulsum Plaza & Stock Exchange",
+      "targetDemographics": [
+        "Government Officials",
+        "Multinational Executives",
+        "High-Income Residents"
+      ],
+      "clutterLevel": "Low (Solo Prime)",
+      "peakCongestionHours": "08:00 AM - 10:30 AM & 04:30 PM - 08:30 PM",
+      "surroundingLandmarks": [
+        "ISE Towers",
+        "Kulsum International Hospital",
+        "Saudi Pak Tower"
+      ]
+    },
+    "coordinates": {
+      "lat": 33.7142,
+      "lng": 73.0617
+    },
+    "authorityNoc": "CDA",
+    "status": "Available",
+    "imageUrl": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80",
+    "techSpecs": {
+      "structureType": "P4 Ultra HD Outdoor LED Screen",
+      "pixelPitch": "P4 SMD",
+      "refreshRate": "3840Hz",
+      "operatingHours": "06:00 AM - 02:00 AM",
+      "generatorBackup": true,
+      "generatorKva": 60,
+      "foundationType": "Structural Steel Column Mount"
+    },
+    "notes": "Premium DOOH digital asset in Islamabad commercial business district.",
+    "isUserCreated": true,
+    "createdAt": "2026-10-21T07:00:00.000Z",
+    "updatedAt": "2026-10-28T09:09:20.911Z"
+  }
+]

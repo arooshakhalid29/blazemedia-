@@ -98,25 +98,25 @@ export const AssetTableView: React.FC<AssetTableViewProps> = ({
         bVal = b.type;
         break;
       case 'totalSqFt':
-        aVal = a.dimensions.totalSqFt;
-        bVal = b.dimensions.totalSqFt;
+        aVal = a.dimensions?.totalSqFt ?? 0;
+        bVal = b.dimensions?.totalSqFt ?? 0;
         break;
       case 'dailyTraffic':
-        aVal = a.profiling.dailyTrafficVehicles;
-        bVal = b.profiling.dailyTrafficVehicles;
+        aVal = a.profiling?.dailyTrafficVehicles ?? 0;
+        bVal = b.profiling?.dailyTrafficVehicles ?? 0;
         break;
       case 'secCategory':
-        aVal = a.profiling.secCategory;
-        bVal = b.profiling.secCategory;
+        aVal = a.profiling?.secCategory || '';
+        bVal = b.profiling?.secCategory || '';
         break;
       case 'vendorRate':
-        aVal = a.cost.vendorRatePkr ?? Math.round(a.cost.monthlyRentalPkr * 0.7);
-        bVal = b.cost.vendorRatePkr ?? Math.round(b.cost.monthlyRentalPkr * 0.7);
+        aVal = a.cost?.vendorRatePkr ?? Math.round((a.cost?.monthlyRentalPkr ?? 0) * 0.7);
+        bVal = b.cost?.vendorRatePkr ?? Math.round((b.cost?.monthlyRentalPkr ?? 0) * 0.7);
         break;
       case 'blazeRate':
       case 'monthlyRental':
-        aVal = a.cost.blazeRatePkr ?? a.cost.monthlyRentalPkr;
-        bVal = b.cost.blazeRatePkr ?? b.cost.monthlyRentalPkr;
+        aVal = a.cost?.blazeRatePkr ?? a.cost?.monthlyRentalPkr ?? 0;
+        bVal = b.cost?.blazeRatePkr ?? b.cost?.monthlyRentalPkr ?? 0;
         break;
       case 'cpm':
         aVal = calculateCPM(a.cost.monthlyRentalPkr, a.profiling.dailyGrossImpressions);
@@ -391,17 +391,17 @@ export const AssetTableView: React.FC<AssetTableViewProps> = ({
                     <span className="text-[10px] text-slate-500 block">{asset.illumination}</span>
                   </td>
                   <td className="py-2.5 px-3 font-mono text-slate-400 tabular-nums">
-                    {asset.dimensions.widthFt} × {asset.dimensions.heightFt} ft
+                    {asset.dimensions?.widthFt ?? 0} × {asset.dimensions?.heightFt ?? 0} ft
                   </td>
                   <td className="py-2.5 px-3 font-mono font-medium text-slate-200 text-right tabular-nums">
-                    {asset.dimensions.totalSqFt.toLocaleString()}
+                    {(asset.dimensions?.totalSqFt ?? 0).toLocaleString()}
                   </td>
                   <td className="py-2.5 px-3 font-mono text-slate-200 text-right tabular-nums">
-                    {formatNumberCompact(asset.profiling.dailyTrafficVehicles)}
+                    {formatNumberCompact(asset.profiling?.dailyTrafficVehicles ?? 0)}
                   </td>
                   <td className="py-2.5 px-3 text-center">
                     <span className="px-1.5 py-0.5 rounded bg-slate-950 text-amber-400 font-mono font-bold text-[10px] border border-slate-800">
-                      {asset.profiling.secCategory}
+                      {asset.profiling?.secCategory || 'A'}
                     </span>
                   </td>
                   <td className="py-2.5 px-3 font-mono text-slate-300 text-right tabular-nums">

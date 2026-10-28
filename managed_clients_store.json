@@ -1,28 +1,10 @@
 [
   {
-    "id": "usr_client_793648",
-    "name": "Fatima Noor",
-    "email": "testclient_1792569793645@agency.com.pk",
-    "organization": "Mindshare Pakistan",
-    "designation": "Media Director",
-    "role": "client",
-    "status": "Active",
-    "requiresPasswordChange": true,
-    "temporaryPassword": "Pass1792569793645!",
-    "password": "Pass1792569793645!",
-    "permittedCities": [
-      "Karachi",
-      "Lahore"
-    ],
-    "createdAt": "2026-10-21T08:03:13.648Z",
-    "createdBy": "admin@blaze.com.pk"
-  },
-  {
-    "id": "usr_client_327630",
-    "name": "Danish Ali",
-    "email": "daneshali1039@gmail.com",
+    "id": "usr_client_137468",
+    "name": "Aroosha Khalid",
+    "email": "arooshakhalid6@gmail.com",
     "organization": "Freelance",
-    "designation": "SENIOR ENG",
+    "designation": "Media Planning Executive",
     "role": "client",
     "status": "Active",
     "requiresPasswordChange": false,
@@ -31,9 +13,35 @@
     "permittedCities": [
       "Karachi",
       "Lahore",
+      "Islamabad",
+      "Rawalpindi",
+      "Faisalabad",
+      "Multan",
+      "Quetta",
+      "Peshawar",
+      "Gujranwala",
+      "Sialkot"
+    ],
+    "createdAt": "2026-10-28T08:45:37.916Z",
+    "createdBy": "admin@blaze.com.pk"
+  },
+  {
+    "id": "usr_client_103901",
+    "name": "Danish Ali",
+    "email": "daneshali1039@gmail.com",
+    "organization": "Freelance Media Planner",
+    "designation": "Media Planning Director",
+    "role": "client",
+    "status": "Active",
+    "requiresPasswordChange": false,
+    "temporaryPassword": "Blz!Danish2026",
+    "password": "Blz!Danish2026",
+    "permittedCities": [
+      "Karachi",
+      "Lahore",
       "Islamabad"
     ],
-    "createdAt": "2026-10-21T07:38:48.399Z",
+    "createdAt": "2026-10-21T07:15:00.000Z",
     "createdBy": "admin@blaze.com.pk"
   },
   {
@@ -52,6 +60,25 @@
       "Lahore"
     ],
     "createdAt": "2026-10-21T07:30:47.216Z",
+    "createdBy": "admin@blaze.com.pk"
+  },
+  {
+    "id": "usr_client_936451",
+    "name": "Fatima Noor",
+    "email": "testclient_1792569793645@agency.com.pk",
+    "organization": "Mindshare Pakistan",
+    "designation": "Senior Media Planner",
+    "role": "client",
+    "status": "Active",
+    "requiresPasswordChange": false,
+    "temporaryPassword": "Mindshare2026!",
+    "password": "Mindshare2026!",
+    "permittedCities": [
+      "Karachi",
+      "Lahore",
+      "Islamabad"
+    ],
+    "createdAt": "2026-10-21T07:45:00.000Z",
     "createdBy": "admin@blaze.com.pk"
   }
 ]

@@ -56,6 +56,119 @@ export function getBlazeRate(cost: CommercialCost): number {
   return cost.blazeRatePkr ?? cost.monthlyRentalPkr;
 }
 
+export function normalizeMediaAsset(raw: any): MediaAsset {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: 'BLZ-UNKNOWN',
+      code: 'UNKNOWN',
+      title: 'Untitled Asset',
+      vendor: 'Blaze Media (Pvt) Ltd',
+      city: 'Karachi',
+      area: 'General',
+      zone: 'General',
+      type: 'Billboard',
+      dimensions: { widthFt: 0, heightFt: 0, totalSqFt: 0 },
+      orientation: 'Landscape',
+      sides: 1,
+      illumination: 'Frontlit',
+      cost: {
+        monthlyRentalPkr: 0,
+        blazeRatePkr: 0,
+        vendorRatePkr: 0,
+        productionCostPkr: 0,
+        mountingCostPkr: 0,
+        taxRatePercent: 13,
+      },
+      profiling: {
+        secCategory: 'A',
+        dailyTrafficVehicles: 0,
+        dailyGrossImpressions: 0,
+        dwellTimeSec: 0,
+        viewingDistanceMeters: 0,
+        trafficDirection: '',
+        targetDemographics: [],
+        clutterLevel: 'Low (Solo Prime)',
+        peakCongestionHours: '',
+        surroundingLandmarks: [],
+      },
+      coordinates: { lat: 24.8607, lng: 67.0011 },
+      status: 'Available',
+      imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80',
+      techSpecs: {
+        structureType: 'Steel Truss',
+        generatorBackup: false,
+        foundationType: 'Concrete',
+      },
+    };
+  }
+
+  const width = Number(raw.dimensions?.widthFt) || 0;
+  const height = Number(raw.dimensions?.heightFt) || 0;
+  const totalSqFt = Number(raw.dimensions?.totalSqFt) || (width && height ? width * height : 0);
+
+  const monthlyRentalPkr = Number(raw.cost?.monthlyRentalPkr ?? raw.cost?.blazeRatePkr) || 0;
+  const blazeRatePkr = Number(raw.cost?.blazeRatePkr ?? raw.cost?.monthlyRentalPkr) || 0;
+  const vendorRatePkr = Number(raw.cost?.vendorRatePkr) || Math.round(monthlyRentalPkr * 1.2);
+
+  return {
+    ...raw,
+    id: raw.id || (raw.code ? `BLZ-${raw.code}` : `BLZ-${Date.now()}`),
+    code: raw.code || (typeof raw.id === 'string' ? raw.id.replace(/^BLZ-/, '') : 'SITE'),
+    title: raw.title || 'Outdoor Display Asset',
+    vendor: raw.vendor || 'Blaze Media (Pvt) Ltd',
+    city: raw.city || 'Karachi',
+    area: raw.area || '',
+    zone: raw.zone || '',
+    type: raw.type || 'Billboard',
+    orientation: raw.orientation || 'Landscape',
+    sides: Number(raw.sides) || 1,
+    illumination: raw.illumination || 'Frontlit',
+    dimensions: {
+      widthFt: width,
+      heightFt: height,
+      totalSqFt: totalSqFt,
+    },
+    cost: {
+      monthlyRentalPkr,
+      blazeRatePkr,
+      vendorRatePkr,
+      productionCostPkr: Number(raw.cost?.productionCostPkr) || 0,
+      mountingCostPkr: Number(raw.cost?.mountingCostPkr) || 0,
+      taxRatePercent: Number(raw.cost?.taxRatePercent) || 13,
+      digitalSlotSec: raw.cost?.digitalSlotSec ? Number(raw.cost.digitalSlotSec) : undefined,
+      spotsPerDay: raw.cost?.spotsPerDay ? Number(raw.cost.spotsPerDay) : undefined,
+    },
+    profiling: {
+      secCategory: raw.profiling?.secCategory || 'A',
+      dailyTrafficVehicles: Number(raw.profiling?.dailyTrafficVehicles) || 0,
+      dailyGrossImpressions: Number(raw.profiling?.dailyGrossImpressions) || 0,
+      dwellTimeSec: Number(raw.profiling?.dwellTimeSec) || 0,
+      viewingDistanceMeters: Number(raw.profiling?.viewingDistanceMeters) || 0,
+      trafficDirection: raw.profiling?.trafficDirection || '',
+      targetDemographics: Array.isArray(raw.profiling?.targetDemographics) ? raw.profiling.targetDemographics : [],
+      clutterLevel: raw.profiling?.clutterLevel || 'Low (Solo Prime)',
+      peakCongestionHours: raw.profiling?.peakCongestionHours || '',
+      surroundingLandmarks: Array.isArray(raw.profiling?.surroundingLandmarks) ? raw.profiling.surroundingLandmarks : [],
+    },
+    coordinates: {
+      lat: Number(raw.coordinates?.lat) || 24.8607,
+      lng: Number(raw.coordinates?.lng) || 67.0011,
+    },
+    status: raw.status || 'Available',
+    imageUrl: raw.imageUrl || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80',
+    techSpecs: {
+      structureType: raw.techSpecs?.structureType || 'Steel Frame',
+      generatorBackup: raw.techSpecs?.generatorBackup === true,
+      foundationType: raw.techSpecs?.foundationType || 'Concrete',
+      pixelPitch: raw.techSpecs?.pixelPitch,
+      refreshRate: raw.techSpecs?.refreshRate,
+      operatingHours: raw.techSpecs?.operatingHours,
+      generatorKva: raw.techSpecs?.generatorKva,
+      lightFixtures: raw.techSpecs?.lightFixtures,
+    },
+  };
+}
+
 export interface MediaProfiling {
   secCategory: SECCategory;
   dailyTrafficVehicles: number;
@@ -110,6 +223,7 @@ export interface MediaAsset {
   notes?: string;
   isUserCreated?: boolean;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface FilterState {

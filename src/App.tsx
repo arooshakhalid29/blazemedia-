@@ -16,6 +16,7 @@ import {
   AssetStatus,
   isAuthorizedAdminEmail,
   VendorRecord,
+  normalizeMediaAsset,
 } from './types/mediaAsset';
 import { LEGACY_DUMMY_ASSET_IDS } from './data/mockAssets';
 import { WindowsTitleBar } from './components/desktop/WindowsTitleBar';
@@ -82,12 +83,17 @@ export default function App() {
     try {
       const stored = localStorage.getItem('blaze_ooh_admin_assets');
       if (stored) {
-        const parsed: MediaAsset[] = JSON.parse(stored);
-        return parsed.filter(
-          (a) =>
-            !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
-            !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
-        );
+        const parsed: any[] = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter(
+              (a) =>
+                a &&
+                !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
+                !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
+            )
+            .map(normalizeMediaAsset);
+        }
       }
     } catch {}
     return [];
@@ -220,22 +226,16 @@ export default function App() {
       .then((res) => res.json())
       .then((data) => {
         if (data.assets && Array.isArray(data.assets) && data.assets.length > 0) {
-          const cleanServerAssets: MediaAsset[] = data.assets.filter(
-            (a: MediaAsset) =>
-              !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
-              !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
-          );
+          const cleanServerAssets: MediaAsset[] = data.assets
+            .filter(
+              (a: any) =>
+                a &&
+                !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
+                !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
+            )
+            .map(normalizeMediaAsset);
           if (cleanServerAssets.length > 0) {
-            setAssets((prev) => {
-              const map = new Map<string, MediaAsset>();
-              cleanServerAssets.forEach((a) => map.set(a.id, a));
-              prev.forEach((a) => {
-                if (!map.has(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.code)) {
-                  map.set(a.id, a);
-                }
-              });
-              return Array.from(map.values());
-            });
+            setAssets(cleanServerAssets);
           }
         }
       })
@@ -293,27 +293,19 @@ export default function App() {
     const unsubscribe = subscribeToMediaAssets(
       (liveAssets) => {
         if (!isMounted) return;
-        const cleanAssets = liveAssets.filter(
-          (a) =>
-            !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
-            !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
-        );
-        setAssets((prev) => {
-          const map = new Map<string, MediaAsset>();
-          // live assets take precedence
-          cleanAssets.forEach((a) => map.set(a.id, a));
-          // keep newly created local items that haven't synced yet
-          prev.forEach((a) => {
-            if (!map.has(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.id) && !LEGACY_DUMMY_ASSET_IDS.includes(a.code)) {
-              map.set(a.id, a);
-            }
-          });
-          const merged = Array.from(map.values());
-          try {
-            localStorage.setItem('blaze_ooh_admin_assets', JSON.stringify(merged));
-          } catch {}
-          return merged;
-        });
+        const cleanAssets = liveAssets
+          .filter(
+            (a) =>
+              a &&
+              !LEGACY_DUMMY_ASSET_IDS.includes(a.id) &&
+              !LEGACY_DUMMY_ASSET_IDS.includes(a.code)
+          )
+          .map(normalizeMediaAsset);
+        // Shared Firestore collection is the single source of truth across all devices
+        setAssets(cleanAssets);
+        try {
+          localStorage.setItem('blaze_ooh_admin_assets', JSON.stringify(cleanAssets));
+        } catch {}
       },
       (err) => {
         console.warn('Live assets sync notice:', err);
@@ -446,27 +438,50 @@ export default function App() {
   // Inventory filtering logic
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
+      if (!asset) return false;
+
+      const title = asset.title || '';
+      const code = asset.code || '';
+      const area = asset.area || '';
+      const city = asset.city || '';
+      const vendor = asset.vendor || '';
+      const type = asset.type || '';
+      const trafficDirection = asset.profiling?.trafficDirection || '';
+      const landmarks = Array.isArray(asset.profiling?.surroundingLandmarks)
+        ? asset.profiling.surroundingLandmarks
+        : [];
+      const demographics = Array.isArray(asset.profiling?.targetDemographics)
+        ? asset.profiling.targetDemographics
+        : [];
+      const totalSqFt =
+        asset.dimensions?.totalSqFt ??
+        (asset.dimensions?.widthFt && asset.dimensions?.heightFt
+          ? asset.dimensions.widthFt * asset.dimensions.heightFt
+          : 0);
+      const monthlyRental =
+        asset.cost?.monthlyRentalPkr ?? asset.cost?.blazeRatePkr ?? 0;
+      const dailyTraffic = asset.profiling?.dailyTrafficVehicles ?? 0;
+      const secCategory = asset.profiling?.secCategory || '';
+
       // 1. Search Query
       if (filters.searchQuery.trim()) {
         const query = filters.searchQuery.toLowerCase();
         const matchesQuery =
-          asset.title.toLowerCase().includes(query) ||
-          asset.code.toLowerCase().includes(query) ||
-          asset.area.toLowerCase().includes(query) ||
-          asset.city.toLowerCase().includes(query) ||
-          (asset.vendor && asset.vendor.toLowerCase().includes(query)) ||
-          asset.type.toLowerCase().includes(query) ||
-          asset.profiling.trafficDirection.toLowerCase().includes(query) ||
-          asset.profiling.surroundingLandmarks.some((lm) =>
-            lm.toLowerCase().includes(query)
-          );
+          title.toLowerCase().includes(query) ||
+          code.toLowerCase().includes(query) ||
+          area.toLowerCase().includes(query) ||
+          city.toLowerCase().includes(query) ||
+          vendor.toLowerCase().includes(query) ||
+          type.toLowerCase().includes(query) ||
+          trafficDirection.toLowerCase().includes(query) ||
+          landmarks.some((lm) => lm && lm.toLowerCase().includes(query));
         if (!matchesQuery) return false;
       }
 
       // 2. City filter
       if (
         filters.selectedCities.length > 0 &&
-        !filters.selectedCities.includes(asset.city)
+        !filters.selectedCities.includes(city)
       ) {
         return false;
       }
@@ -474,7 +489,7 @@ export default function App() {
       // 3. Vendor filter
       if (
         filters.selectedVendors.length > 0 &&
-        !filters.selectedVendors.includes(asset.vendor)
+        !filters.selectedVendors.includes(vendor)
       ) {
         return false;
       }
@@ -482,7 +497,7 @@ export default function App() {
       // 4. Media Type filter
       if (
         filters.selectedTypes.length > 0 &&
-        !filters.selectedTypes.includes(asset.type)
+        !filters.selectedTypes.includes(type as any)
       ) {
         return false;
       }
@@ -498,7 +513,7 @@ export default function App() {
       // 6. SEC Class filter
       if (
         filters.selectedSECs.length > 0 &&
-        !filters.selectedSECs.includes(asset.profiling.secCategory)
+        !filters.selectedSECs.includes(secCategory as any)
       ) {
         return false;
       }
@@ -512,24 +527,24 @@ export default function App() {
       }
 
       // 8. Area (sq ft) filter
-      if (asset.dimensions.totalSqFt < filters.minAreaSqFt) {
+      if (totalSqFt < filters.minAreaSqFt) {
         return false;
       }
 
       // 9. Monthly cost filter
-      if (asset.cost.monthlyRentalPkr > filters.maxMonthlyCostPkr) {
+      if (monthlyRental > filters.maxMonthlyCostPkr) {
         return false;
       }
 
       // 10. Daily Traffic filter
-      if (asset.profiling.dailyTrafficVehicles < filters.minDailyTraffic) {
+      if (dailyTraffic < filters.minDailyTraffic) {
         return false;
       }
 
       // 11. Demographic filter
       if (filters.selectedDemographic) {
-        const matchesDemo = asset.profiling.targetDemographics.some((d) =>
-          d.toLowerCase().includes(filters.selectedDemographic.toLowerCase())
+        const matchesDemo = demographics.some((d) =>
+          d && d.toLowerCase().includes(filters.selectedDemographic.toLowerCase())
         );
         if (!matchesDemo) return false;
       }
@@ -980,24 +995,24 @@ export default function App() {
     ];
 
     const rows = filteredAssets.map((a) => [
-      a.code,
-      `"${a.title}"`,
-      `"${a.vendor}"`,
-      a.city,
-      `"${a.area}"`,
-      a.type,
-      a.dimensions.widthFt,
-      a.dimensions.heightFt,
-      a.dimensions.totalSqFt,
-      a.illumination,
-      a.cost.vendorRatePkr ?? Math.round(a.cost.monthlyRentalPkr * 0.7),
-      a.cost.blazeRatePkr ?? a.cost.monthlyRentalPkr,
-      a.profiling.dailyTrafficVehicles,
-      a.profiling.dailyGrossImpressions,
-      a.profiling.secCategory,
-      a.profiling.dwellTimeSec,
-      a.status,
-      `"${a.profiling.trafficDirection}"`,
+      a.code || '',
+      `"${a.title || ''}"`,
+      `"${a.vendor || ''}"`,
+      a.city || '',
+      `"${a.area || ''}"`,
+      a.type || '',
+      a.dimensions?.widthFt ?? 0,
+      a.dimensions?.heightFt ?? 0,
+      a.dimensions?.totalSqFt ?? 0,
+      a.illumination || '',
+      a.cost?.vendorRatePkr ?? Math.round((a.cost?.monthlyRentalPkr ?? 0) * 0.7),
+      a.cost?.blazeRatePkr ?? a.cost?.monthlyRentalPkr ?? 0,
+      a.profiling?.dailyTrafficVehicles ?? 0,
+      a.profiling?.dailyGrossImpressions ?? 0,
+      a.profiling?.secCategory || '',
+      a.profiling?.dwellTimeSec ?? 0,
+      a.status || '',
+      `"${a.profiling?.trafficDirection || ''}"`,
     ]);
 
     const csvContent =

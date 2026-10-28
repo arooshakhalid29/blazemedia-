@@ -121,16 +121,16 @@ export const CampaignCartModal: React.FC<CampaignCartModalProps> = ({
       item.asset.city,
       `"${item.asset.area}"`,
       `"${item.asset.title}"`,
-      item.asset.type,
-      `"${item.asset.dimensions.widthFt}x${item.asset.dimensions.heightFt} ft"`,
-      item.asset.dimensions.totalSqFt,
-      item.asset.illumination,
+      item.asset.type || '',
+      `"${item.asset.dimensions?.widthFt ?? 0}x${item.asset.dimensions?.heightFt ?? 0} ft"`,
+      item.asset.dimensions?.totalSqFt ?? 0,
+      item.asset.illumination || '',
       item.durationMonths,
-      item.asset.cost.monthlyRentalPkr,
-      item.asset.cost.monthlyRentalPkr * item.durationMonths,
-      item.asset.cost.productionCostPkr,
-      item.asset.profiling.dailyTrafficVehicles,
-      item.asset.profiling.secCategory,
+      item.asset.cost?.monthlyRentalPkr ?? item.asset.cost?.blazeRatePkr ?? 0,
+      (item.asset.cost?.monthlyRentalPkr ?? item.asset.cost?.blazeRatePkr ?? 0) * item.durationMonths,
+      item.asset.cost?.productionCostPkr ?? 0,
+      item.asset.profiling?.dailyTrafficVehicles ?? 0,
+      item.asset.profiling?.secCategory || 'A',
     ]);
 
     const csvContent =
@@ -306,16 +306,16 @@ export const CampaignCartModal: React.FC<CampaignCartModalProps> = ({
                       </td>
                       <td className="p-2 text-slate-700">{item.asset.type}</td>
                       <td className="p-2 font-mono text-slate-600">
-                        {item.asset.dimensions.widthFt}x{item.asset.dimensions.heightFt} ft
+                        {(item.asset.dimensions?.widthFt ?? 0)}x{(item.asset.dimensions?.heightFt ?? 0)} ft
                       </td>
                       <td className="p-2 font-mono text-right text-slate-700">
-                        {formatNumberCompact(item.asset.profiling.dailyTrafficVehicles)}
+                        {formatNumberCompact(item.asset.profiling?.dailyTrafficVehicles ?? 0)}
                       </td>
                       <td className="p-2 text-center font-mono">
                         {item.durationMonths} mo
                       </td>
                       <td className="p-2 font-mono text-right text-slate-800">
-                        ₨ {item.asset.cost.monthlyRentalPkr.toLocaleString('en-PK')}
+                        ₨ {(item.asset.cost?.monthlyRentalPkr ?? item.asset.cost?.blazeRatePkr ?? 0).toLocaleString('en-PK')}
                       </td>
                       <td className="p-2 font-mono font-bold text-right text-slate-950">
                         ₨ {(item.asset.cost.monthlyRentalPkr * item.durationMonths).toLocaleString('en-PK')}
@@ -465,11 +465,11 @@ export const CampaignCartModal: React.FC<CampaignCartModalProps> = ({
                           {item.asset.title}
                         </h4>
                         <div className="flex items-center gap-3 text-[10px] text-slate-500 font-mono mt-0.5">
-                          <span>{item.asset.dimensions.widthFt}×{item.asset.dimensions.heightFt} ft</span>
+                          <span>{(item.asset.dimensions?.widthFt ?? 0)}×{(item.asset.dimensions?.heightFt ?? 0)} ft</span>
                           <span>·</span>
-                          <span>{formatNumberCompact(item.asset.profiling.dailyTrafficVehicles)} cars/day</span>
+                          <span>{formatNumberCompact(item.asset.profiling?.dailyTrafficVehicles ?? 0)} cars/day</span>
                           <span>·</span>
-                          <span className="text-amber-400">SEC {item.asset.profiling.secCategory}</span>
+                          <span className="text-amber-400">SEC {item.asset.profiling?.secCategory || 'A'}</span>
                         </div>
                       </div>
                     </div>

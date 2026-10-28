@@ -19,6 +19,26 @@ import firebaseConfig from './firebase-applet-config.json' with { type: 'json' }
 const serverFirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const serverDb = getFirestore(serverFirebaseApp, firebaseConfig.firestoreDatabaseId);
 
+// Recursively scrub undefined properties so Firestore writes never fail
+function sanitizeForFirestore<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      if (val !== undefined) {
+        cleaned[key] = sanitizeForFirestore(val);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -53,13 +73,12 @@ async function syncAssetsFromFirestore() {
   try {
     const snap = await getDocs(collection(serverDb, 'mediaAssets'));
     if (!snap.empty) {
-      const map = new Map<string, any>();
-      serverAssetStore.forEach((a) => map.set(a.id, a));
+      const list: any[] = [];
       snap.forEach((d) => {
         const data = d.data();
-        map.set(d.id, { ...data, id: d.id });
+        list.push({ ...data, id: d.id });
       });
-      serverAssetStore = Array.from(map.values());
+      serverAssetStore = list;
       saveAssetStore();
       console.log(`[Blaze Assets] Synced ${serverAssetStore.length} asset(s) with Firestore.`);
     }
@@ -258,14 +277,21 @@ app.post('/api/assets', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid asset payload.' });
   }
   const assetId = asset.id || `BLZ-${asset.code}`;
+  const cleanAsset = sanitizeForFirestore({ ...asset, id: assetId });
   const existingIdx = serverAssetStore.findIndex(a => a.id === assetId || a.code === asset.code);
   if (existingIdx >= 0) {
-    serverAssetStore[existingIdx] = { ...asset, id: assetId };
+    serverAssetStore[existingIdx] = cleanAsset;
   } else {
-    serverAssetStore.unshift({ ...asset, id: assetId });
+    serverAssetStore.unshift(cleanAsset);
   }
   saveAssetStore();
-  res.json({ success: true, asset: { ...asset, id: assetId } });
+
+  // Persist directly to Firestore
+  try {
+    setDoc(doc(serverDb, 'mediaAssets', assetId), cleanAsset, { merge: true }).catch(console.warn);
+  } catch {}
+
+  res.json({ success: true, asset: cleanAsset });
 });
 
 // Delete single asset (Administrator only - clients strictly forbidden)
@@ -287,6 +313,14 @@ app.delete('/api/assets/:id', (req: Request, res: Response) => {
       a.id !== `BLZ-${normalizedId}`
   );
   saveAssetStore();
+
+  // Delete from Firestore
+  try {
+    deleteDoc(doc(serverDb, 'mediaAssets', targetId)).catch(console.warn);
+    deleteDoc(doc(serverDb, 'mediaAssets', `BLZ-${targetId}`)).catch(console.warn);
+    deleteDoc(doc(serverDb, 'mediaAssets', normalizedId)).catch(console.warn);
+  } catch {}
+
   res.json({
     success: true,
     message: `Asset ${targetId} permanently deleted from database.`,
@@ -456,7 +490,7 @@ app.post('/api/admin/clients', (req: Request, res: Response) => {
 
     // Sync to Firestore
     try {
-      setDoc(doc(serverDb, 'users', managedClientStore[existingIndex].id), managedClientStore[existingIndex], { merge: true }).catch(console.warn);
+      setDoc(doc(serverDb, 'users', managedClientStore[existingIndex].id), sanitizeForFirestore(managedClientStore[existingIndex]), { merge: true }).catch(console.warn);
     } catch {}
 
     return res.status(200).json({
@@ -487,7 +521,7 @@ app.post('/api/admin/clients', (req: Request, res: Response) => {
 
   // Save to Firestore
   try {
-    setDoc(doc(serverDb, 'users', newClient.id), newClient, { merge: true }).catch(console.warn);
+    setDoc(doc(serverDb, 'users', newClient.id), sanitizeForFirestore(newClient), { merge: true }).catch(console.warn);
   } catch {}
 
   res.status(201).json({
@@ -515,6 +549,14 @@ app.delete('/api/admin/clients/:id', (req: Request, res: Response) => {
       (!emailParam || c.email?.toLowerCase().trim() !== emailParam)
   );
   saveClientStore();
+
+  // Delete from Firestore
+  try {
+    deleteDoc(doc(serverDb, 'users', id)).catch(console.warn);
+    if (target && target !== id) {
+      deleteDoc(doc(serverDb, 'users', target)).catch(console.warn);
+    }
+  } catch {}
 
   res.json({ success: true, message: 'Client account deleted successfully.', remaining: managedClientStore.length });
 });
@@ -868,7 +910,7 @@ app.post('/api/bookings/request', async (req: Request, res: Response) => {
 
   // Save directly to Firestore
   try {
-    await setDoc(doc(serverDb, 'bookings', bookingId), booking, { merge: true });
+    await setDoc(doc(serverDb, 'bookings', bookingId), sanitizeForFirestore(booking), { merge: true });
   } catch (err: any) {
     console.warn('Notice persisting booking to Firestore:', err.message);
   }
@@ -906,7 +948,7 @@ app.patch('/api/bookings/:id/status', async (req: Request, res: Response) => {
 
   // Persist to Firestore
   try {
-    await setDoc(doc(serverDb, 'bookings', bookingId), updatePayload, { merge: true });
+    await setDoc(doc(serverDb, 'bookings', bookingId), sanitizeForFirestore(updatePayload), { merge: true });
   } catch (err: any) {
     console.warn('Notice updating booking status in Firestore:', err.message);
   }
@@ -944,7 +986,7 @@ app.post('/api/bookings/:id/status', async (req: Request, res: Response) => {
   }
 
   try {
-    await setDoc(doc(serverDb, 'bookings', bookingId), updatePayload, { merge: true });
+    await setDoc(doc(serverDb, 'bookings', bookingId), sanitizeForFirestore(updatePayload), { merge: true });
   } catch (err: any) {
     console.warn('Notice updating booking status in Firestore:', err.message);
   }
@@ -1224,7 +1266,7 @@ app.post('/api/vendors', async (req: Request, res: Response) => {
 
   // Persist to Firestore
   try {
-    await setDoc(doc(serverDb, 'vendors', vendorId), newVendor, { merge: true });
+    await setDoc(doc(serverDb, 'vendors', vendorId), sanitizeForFirestore(newVendor), { merge: true });
   } catch (err: any) {
     console.warn('Notice saving vendor to Firestore:', err.message);
   }
@@ -1281,7 +1323,7 @@ const handleVendorUpdate = async (req: Request, res: Response) => {
 
   // Persist to Firestore
   try {
-    await setDoc(doc(serverDb, 'vendors', vendorId), updatedVendor, { merge: true });
+    await setDoc(doc(serverDb, 'vendors', vendorId), sanitizeForFirestore(updatedVendor), { merge: true });
   } catch (err: any) {
     console.warn('Notice updating vendor in Firestore:', err.message);
   }

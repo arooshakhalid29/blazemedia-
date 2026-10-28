@@ -55,6 +55,26 @@ export const storage = getStorage(app);
 export const googleAuthProvider = new GoogleAuthProvider();
 googleAuthProvider.setCustomParameters({ prompt: 'select_account' });
 
+// Recursively clean undefined values so setDoc/updateDoc never fails on Firestore
+export function sanitizeForFirestore<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      if (val !== undefined) {
+        cleaned[key] = sanitizeForFirestore(val);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
 // Firestore Error Handling Definition per skill specification
 export enum OperationType {
   CREATE = 'create',
@@ -498,11 +518,12 @@ export async function adminCreateClientAccount(params: {
     createdBy: 'admin@blaze.com.pk',
   };
 
-  // 1. Save to Firestore /users/{uid}
+  // 1. Save directly to shared Firestore /users/{uid}
   try {
-    await setDoc(doc(db, 'users', uid), clientRecord, { merge: true });
+    await setDoc(doc(db, 'users', uid), sanitizeForFirestore(clientRecord), { merge: true });
+    console.log(`[Blaze Auth] Client ${cleanClientEmail} persisted to Firestore.`);
   } catch (err) {
-    console.warn('Firestore client doc write notice (persisting via server store):', err);
+    console.error('Firestore client doc write error:', err);
   }
 
   // 2. Synchronize to backend server store
@@ -541,34 +562,18 @@ export async function adminCreateClientAccount(params: {
 // Fetch all provisioned client accounts (Administrator only)
 export async function fetchManagedClients(adminEmail?: string): Promise<ManagedClientRecord[]> {
   const cleanAdmin = (adminEmail || auth.currentUser?.email || 'admin@blaze.com.pk').toLowerCase().trim();
-
-  // Read tombstones from localStorage
-  let deletedIds: string[] = [];
-  let deletedEmails: string[] = [];
-  try {
-    deletedIds = JSON.parse(localStorage.getItem('blaze_ooh_deleted_client_ids') || '[]');
-    deletedEmails = JSON.parse(localStorage.getItem('blaze_ooh_deleted_client_emails') || '[]');
-  } catch {}
-
-  const isTombstoned = (c: ManagedClientRecord) => {
-    return (
-      deletedIds.includes(c.id) ||
-      (c.email && deletedEmails.includes(c.email.toLowerCase().trim()))
-    );
-  };
-
   const clientMap = new Map<string, ManagedClientRecord>();
 
-  // 1. Try Firestore first
+  // 1. Fetch directly from shared Firestore collection /users
   try {
     const usersCol = collection(db, 'users');
     const snap = await getDocs(usersCol);
     if (!snap.empty) {
       snap.forEach((d) => {
         const data = d.data() as ManagedClientRecord;
-        if (data.role === 'client' && !isTombstoned(data)) {
+        if (data.role === 'client') {
           const key = data.email?.toLowerCase().trim() || data.id;
-          clientMap.set(key, data);
+          clientMap.set(key, { ...data, id: d.id });
         }
       });
     }
@@ -576,7 +581,7 @@ export async function fetchManagedClients(adminEmail?: string): Promise<ManagedC
     console.warn('Firestore clients list notice:', err);
   }
 
-  // 2. Fetch from server endpoint
+  // 2. Fetch from server endpoint as fallback / secondary check
   try {
     const apiUrl =
       typeof window !== 'undefined' ? '/api/admin/clients' : 'http://localhost:3000/api/admin/clients';
@@ -589,31 +594,48 @@ export async function fetchManagedClients(adminEmail?: string): Promise<ManagedC
       const data = await res.json();
       if (Array.isArray(data.clients)) {
         data.clients.forEach((c: ManagedClientRecord) => {
-          if (!isTombstoned(c)) {
-            const key = c.email?.toLowerCase().trim() || c.id;
-            if (!clientMap.has(key)) {
-              clientMap.set(key, c);
-            }
+          const key = c.email?.toLowerCase().trim() || c.id;
+          if (!clientMap.has(key)) {
+            clientMap.set(key, c);
           }
         });
       }
     }
   } catch {}
 
-  // 3. Merge custom clients from localStorage if any
-  try {
-    const cached: ManagedClientRecord[] = JSON.parse(localStorage.getItem('blaze_ooh_custom_clients') || '[]');
-    cached.forEach((c) => {
-      if (!isTombstoned(c)) {
-        const key = c.email?.toLowerCase().trim() || c.id;
-        if (!clientMap.has(key)) {
-          clientMap.set(key, c);
-        }
-      }
-    });
-  } catch {}
+  const list = Array.from(clientMap.values());
+  list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  return list;
+}
 
-  return Array.from(clientMap.values());
+// Real-time synchronization of Managed Clients from Firestore /users
+export function subscribeToManagedClients(
+  onClients: (clients: ManagedClientRecord[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  const usersCol = collection(db, 'users');
+
+  return onSnapshot(
+    usersCol,
+    (snapshot) => {
+      const items: ManagedClientRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as ManagedClientRecord;
+        if (data.role === 'client') {
+          items.push({
+            ...data,
+            id: docSnap.id,
+          });
+        }
+      });
+      items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      onClients(items);
+    },
+    (error) => {
+      console.warn('Real-time clients sync notice:', error.message);
+      if (onError) onError(error);
+    }
+  );
 }
 
 // Delete client account (Administrator only)
@@ -629,30 +651,11 @@ export async function adminDeleteClient(
 
   const cleanEmail = (clientEmail || '').toLowerCase().trim();
 
-  // Record into deleted tombstone list in localStorage
-  try {
-    const deletedIds: string[] = JSON.parse(localStorage.getItem('blaze_ooh_deleted_client_ids') || '[]');
-    if (clientId && !deletedIds.includes(clientId)) {
-      deletedIds.push(clientId);
-      localStorage.setItem('blaze_ooh_deleted_client_ids', JSON.stringify(deletedIds));
-    }
-    if (cleanEmail) {
-      const deletedEmails: string[] = JSON.parse(localStorage.getItem('blaze_ooh_deleted_client_emails') || '[]');
-      if (!deletedEmails.includes(cleanEmail)) {
-        deletedEmails.push(cleanEmail);
-        localStorage.setItem('blaze_ooh_deleted_client_emails', JSON.stringify(deletedEmails));
-      }
-    }
-    // Remove from custom clients cache
-    const cached: ManagedClientRecord[] = JSON.parse(localStorage.getItem('blaze_ooh_custom_clients') || '[]');
-    const nextCached = cached.filter((c) => c.id !== clientId && c.email?.toLowerCase().trim() !== cleanEmail);
-    localStorage.setItem('blaze_ooh_custom_clients', JSON.stringify(nextCached));
-  } catch {}
-
   // 1. Delete from Firestore by document ID
   if (clientId) {
     try {
       await deleteDoc(doc(db, 'users', clientId));
+      console.log(`[Blaze Auth] Client document ${clientId} deleted from Firestore.`);
     } catch (err) {
       console.warn('Firestore client delete notice:', err);
     }
@@ -673,7 +676,7 @@ export async function adminDeleteClient(
     }
   }
 
-  // 3. Delete from server store
+  // 3. Delete from backend server store
   try {
     const targetParam = encodeURIComponent(clientId || cleanEmail);
     const queryParam = cleanEmail ? `?email=${encodeURIComponent(cleanEmail)}` : '';
@@ -829,20 +832,21 @@ export async function persistMediaAsset(asset: MediaAsset): Promise<void> {
   const payload: MediaAsset = {
     ...asset,
     id: assetId,
-    ...( { isUserCreated: true, createdAt: (asset as any).createdAt || new Date().toISOString() } as any ),
+    isUserCreated: true,
+    createdAt: (asset as any).createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
-  // 1. Sync to local storage for instant offline / tab availability
+  const cleanPayload = sanitizeForFirestore(payload);
+
+  // 1. Persist directly to shared Firestore collection (PRIMARY SOURCE OF TRUTH)
   try {
-    const local: MediaAsset[] = JSON.parse(localStorage.getItem('blaze_ooh_admin_assets') || '[]');
-    const idx = local.findIndex((a) => a.id === assetId);
-    if (idx >= 0) {
-      local[idx] = payload;
-    } else {
-      local.unshift(payload);
-    }
-    localStorage.setItem('blaze_ooh_admin_assets', JSON.stringify(local));
-  } catch {}
+    await setDoc(assetDoc, cleanPayload, { merge: true });
+    console.log(`[Blaze Assets] Persisted asset ${assetId} to Firestore successfully.`);
+  } catch (error) {
+    console.error('Firestore asset save error:', error);
+    throw error;
+  }
 
   // 2. Synchronize with backend Express server API
   try {
@@ -852,18 +856,23 @@ export async function persistMediaAsset(asset: MediaAsset): Promise<void> {
         'Content-Type': 'application/json',
         'x-admin-email': 'admin@blaze.com.pk',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
   } catch (err) {
     console.warn('Backend server asset persist notice:', err);
   }
 
-  // 3. Persist to Firestore collection
+  // 3. Update local storage cache
   try {
-    await setDoc(assetDoc, payload, { merge: true });
-  } catch (error) {
-    console.warn('Firestore asset save notice:', error);
-  }
+    const local: MediaAsset[] = JSON.parse(localStorage.getItem('blaze_ooh_admin_assets') || '[]');
+    const idx = local.findIndex((a) => a.id === assetId || a.code === asset.code);
+    if (idx >= 0) {
+      local[idx] = cleanPayload;
+    } else {
+      local.unshift(cleanPayload);
+    }
+    localStorage.setItem('blaze_ooh_admin_assets', JSON.stringify(local));
+  } catch {}
 }
 
 // Storage: Delete individual image from Firebase Storage if hosted there
@@ -1106,7 +1115,7 @@ export async function persistBatchMediaAssets(assets: MediaAsset[]): Promise<num
     chunk.forEach((asset) => {
       const assetId = asset.id || `BLZ-${asset.code}`;
       const assetDoc = doc(db, 'mediaAssets', assetId);
-      batch.set(assetDoc, asset, { merge: true });
+      batch.set(assetDoc, sanitizeForFirestore(asset), { merge: true });
     });
 
     try {
@@ -1239,13 +1248,14 @@ export async function persistBookingRequest(booking: BookingRequest): Promise<vo
     ...booking,
     clientUid: auth.currentUser?.uid || (booking as any).clientUid || 'guest-client',
   };
+  const cleanPayload = sanitizeForFirestore(payload);
 
   // 1. Sync to local storage
   try {
     const local = JSON.parse(localStorage.getItem('blaze_ooh_bookings') || '[]');
     const idx = local.findIndex((b: any) => b.bookingId === bookingId);
-    if (idx >= 0) local[idx] = payload;
-    else local.unshift(payload);
+    if (idx >= 0) local[idx] = cleanPayload;
+    else local.unshift(cleanPayload);
     localStorage.setItem('blaze_ooh_bookings', JSON.stringify(local));
   } catch {}
 
@@ -1254,7 +1264,7 @@ export async function persistBookingRequest(booking: BookingRequest): Promise<vo
     await fetch('/api/bookings/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
   } catch (err) {
     console.warn('Backend server booking save notice:', err);
@@ -1262,7 +1272,7 @@ export async function persistBookingRequest(booking: BookingRequest): Promise<vo
 
   // 3. Persist to Firestore
   try {
-    await setDoc(bookingDoc, payload, { merge: true });
+    await setDoc(bookingDoc, cleanPayload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `bookings/${bookingId}`);
   }
@@ -1282,12 +1292,13 @@ export async function updateBookingStatus(
   if (notes !== undefined) {
     updatePayload.notes = notes;
   }
+  const cleanPayload = sanitizeForFirestore(updatePayload);
 
   // 1. Update localStorage
   try {
     const local = JSON.parse(localStorage.getItem('blaze_ooh_bookings') || '[]');
     const updated = local.map((b: any) =>
-      b.bookingId === bookingId ? { ...b, ...updatePayload } : b
+      b.bookingId === bookingId ? { ...b, ...cleanPayload } : b
     );
     localStorage.setItem('blaze_ooh_bookings', JSON.stringify(updated));
   } catch {}
@@ -1300,7 +1311,7 @@ export async function updateBookingStatus(
         'Content-Type': 'application/json',
         'x-admin-email': 'admin@blaze.com.pk',
       },
-      body: JSON.stringify({ status: newStatus, notes }),
+      body: JSON.stringify(cleanPayload),
     });
   } catch (err) {
     console.warn('Backend server booking status update notice:', err);
@@ -1308,7 +1319,7 @@ export async function updateBookingStatus(
 
   // 3. Persist to Firestore
   try {
-    await setDoc(bookingDoc, updatePayload, { merge: true });
+    await setDoc(bookingDoc, cleanPayload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
   }
@@ -1416,6 +1427,7 @@ export async function persistVendor(vendor: VendorRecord): Promise<void> {
     createdAt: vendor.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+  const cleanPayload = sanitizeForFirestore(payload);
 
   // 1. Update localStorage
   try {
@@ -1424,9 +1436,9 @@ export async function persistVendor(vendor: VendorRecord): Promise<void> {
     let updated: VendorRecord[];
     if (idx >= 0) {
       updated = [...current];
-      updated[idx] = payload;
+      updated[idx] = cleanPayload;
     } else {
-      updated = [payload, ...current];
+      updated = [cleanPayload, ...current];
     }
     localStorage.setItem('blaze_ooh_vendors', JSON.stringify(updated));
   } catch {}
@@ -1439,7 +1451,7 @@ export async function persistVendor(vendor: VendorRecord): Promise<void> {
         'Content-Type': 'application/json',
         'x-admin-email': 'admin@blaze.com.pk',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
   } catch (err) {
     console.warn('Backend server vendor save notice:', err);
@@ -1448,7 +1460,7 @@ export async function persistVendor(vendor: VendorRecord): Promise<void> {
   // 3. Persist to Firestore
   try {
     const vendorDoc = doc(db, 'vendors', vendorId);
-    await setDoc(vendorDoc, payload, { merge: true });
+    await setDoc(vendorDoc, cleanPayload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `vendors/${vendorId}`);
   }
@@ -1462,11 +1474,12 @@ export async function updateVendorRecord(
     ...updates,
     updatedAt: new Date().toISOString(),
   };
+  const cleanPayload = sanitizeForFirestore(updatePayload);
 
   // 1. Update localStorage
   try {
     const current = getLocalVendors();
-    const updated = current.map((v) => (v.id === vendorId ? { ...v, ...updatePayload } : v));
+    const updated = current.map((v) => (v.id === vendorId ? { ...v, ...cleanPayload } : v));
     localStorage.setItem('blaze_ooh_vendors', JSON.stringify(updated));
   } catch {}
 
@@ -1478,7 +1491,7 @@ export async function updateVendorRecord(
         'Content-Type': 'application/json',
         'x-admin-email': 'admin@blaze.com.pk',
       },
-      body: JSON.stringify(updatePayload),
+      body: JSON.stringify(cleanPayload),
     });
   } catch (err) {
     console.warn('Backend server vendor update notice:', err);
@@ -1487,7 +1500,7 @@ export async function updateVendorRecord(
   // 3. Persist to Firestore
   try {
     const vendorDoc = doc(db, 'vendors', vendorId);
-    await setDoc(vendorDoc, updatePayload, { merge: true });
+    await setDoc(vendorDoc, cleanPayload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `vendors/${vendorId}`);
   }

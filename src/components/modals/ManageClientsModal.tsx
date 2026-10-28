@@ -26,6 +26,7 @@ import { ManagedClientRecord, UserAccount } from '../../types/mediaAsset';
 import {
   adminCreateClientAccount,
   fetchManagedClients,
+  subscribeToManagedClients,
   adminDeleteClient,
 } from '../../services/firebase';
 
@@ -103,7 +104,19 @@ export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
   };
 
   useEffect(() => {
-    loadClients();
+    setIsLoading(true);
+    const unsubscribe = subscribeToManagedClients(
+      (list) => {
+        setClients(list);
+        setIsLoading(false);
+        if (onClientsUpdated) onClientsUpdated(list);
+      },
+      (err) => {
+        console.warn('Realtime clients sync fallback to fetch:', err);
+        loadClients();
+      }
+    );
+    return () => unsubscribe();
   }, [currentUser]);
 
   // Generate a random strong password

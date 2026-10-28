@@ -451,19 +451,19 @@ export const AssetMapView: React.FC<AssetMapViewProps> = ({
               <div className="p-2 bg-slate-950/60 rounded border border-slate-800">
                 <span className="text-slate-500 text-[10px] block">Gross Impressions</span>
                 <span className="font-mono text-slate-200 font-bold">
-                  {formatNumberCompact(selectedAsset.profiling.dailyGrossImpressions)}/day
+                  {formatNumberCompact(selectedAsset.profiling?.dailyGrossImpressions ?? 0)}/day
                 </span>
               </div>
               <div className="p-2 bg-slate-950/60 rounded border border-slate-800">
                 <span className="text-slate-500 text-[10px] block">Dimensions</span>
                 <span className="font-mono text-slate-200 font-bold">
-                  {selectedAsset.dimensions.widthFt}×{selectedAsset.dimensions.heightFt} ft
+                  {selectedAsset.dimensions?.widthFt ?? 0}×{selectedAsset.dimensions?.heightFt ?? 0} ft
                 </span>
               </div>
               <div className="p-2 bg-slate-950/60 rounded border border-slate-800">
                 <span className="text-slate-500 text-[10px] block">Audience SEC</span>
                 <span className="font-mono text-amber-400 font-bold">
-                  Class {selectedAsset.profiling.secCategory}
+                  Class {selectedAsset.profiling?.secCategory || 'A'}
                 </span>
               </div>
             </div>
