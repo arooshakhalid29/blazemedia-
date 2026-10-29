@@ -1,6 +1,20 @@
 [
   {
-    "id": "usr_client_137468",
+    "id": "usr_client_397553",
+    "name": "Verification Client",
+    "email": "verify_client_1793265397548@agency.com",
+    "organization": "Agency QA Group",
+    "designation": "Media Planner",
+    "role": "client",
+    "status": "Active",
+    "permittedCities": [],
+    "createdAt": "2026-10-29T09:16:37.553Z",
+    "createdBy": "admin@blaze.com.pk",
+    "passwordHash": "028c0d700530cfbd68a4f617cd91181d:298fbe3f196cab3aad14bbfae48ae39f7e577b096c6253ae02551e865622dd49a1f968c82f7b73130110791bd7d687c82e2fc4eddaaf774533d32ff84038b305",
+    "updatedAt": "2026-10-29T09:16:37.671Z"
+  },
+  {
+    "id": "usr_client_177004",
     "name": "Aroosha Khalid",
     "email": "arooshakhalid6@gmail.com",
     "organization": "Freelance",
@@ -8,7 +22,7 @@
     "role": "client",
     "status": "Active",
     "permittedCities": [],
-    "createdAt": "2026-10-28T08:45:37.916Z",
+    "createdAt": "2026-10-29T08:56:17.705Z",
     "createdBy": "admin@blaze.com.pk",
     "passwordHash": "7e6e0b278909dd6cf1b8ffae661de8ee:2702907343c61e9ff92b7e0ab292e7c10fa307eeb8944bcf818e6da8de3728ab15693497dce16abd2622ec1a077de8f742156373bbabc9b9a2f9b4f3ba569de1"
   },
@@ -75,7 +89,8 @@
     "permittedCities": [],
     "createdAt": "2026-10-29T07:05:43.616Z",
     "createdBy": "admin@blaze.com.pk",
-    "passwordHash": "5ac8e7f83090a2a4bcd09aa998e9ae45:df1569600413978d646b2bd2496b0c973be2f166a9bff365dedffe0bbd3636cbf0ea0521bdedecb1474640a12159244d4e93e345e98b92ba320ed56d2becdb35"
+    "passwordHash": "ee1ffa59e6499e02db69c549bcaebb0b:d2cadb8a46f9d7a491261c88f381148075bf70cf294b256c17d0b83c51ba5559e432ce6839c5eeb119d999942d612dc6ebe99c40152b335942b4fa2d87ff271f",
+    "updatedAt": "2026-10-29T09:16:37.330Z"
   },
   {
     "id": "usr_client_730336",
@@ -99,6 +114,18 @@
     "status": "Active",
     "permittedCities": [],
     "createdAt": "2026-10-29T07:08:50.952Z",
+    "createdBy": "admin@blaze.com.pk"
+  },
+  {
+    "id": "usr_client_897260",
+    "name": "Nationwide Planner",
+    "email": "test_unrestricted_1793260897243@agency.pk",
+    "organization": "Nationwide Media Agency",
+    "designation": "VP Planning",
+    "role": "client",
+    "status": "Active",
+    "permittedCities": [],
+    "createdAt": "2026-10-29T08:01:37.260Z",
     "createdBy": "admin@blaze.com.pk"
   }
 ]

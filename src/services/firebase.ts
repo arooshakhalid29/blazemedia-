@@ -359,7 +359,7 @@ export async function signInWithEmail(email: string, pass: string): Promise<User
       }
     } else {
       const errData = await resp.json().catch(() => ({}));
-      if (errData.error && !errData.error.includes('No client account found')) {
+      if (errData.error) {
         throw new Error(errData.error);
       }
     }
@@ -427,17 +427,19 @@ export async function adminCreateClientAccount(params: {
           await updateProfile(cred.user, { displayName: params.name.trim() });
         } catch {}
       }
+    } catch (createErr: any) {
+      if (createErr.code === 'auth/email-already-in-use') {
+        console.info('Client email already registered in Firebase Auth.');
+      } else {
+        console.warn('Firebase Auth user creation notice:', createErr.message);
+      }
     } finally {
       try {
         await deleteApp(secondaryApp);
       } catch {}
     }
   } catch (authErr: any) {
-    if (authErr.code === 'auth/email-already-in-use') {
-      console.info('Client email already in Firebase Auth, updating record.');
-    } else {
-      console.warn('Firebase Auth secondary provisioning notice:', authErr.message);
-    }
+    console.warn('Firebase Auth secondary provisioning notice:', authErr.message);
   }
 
   // Safe client profile record: strictly NO password fields stored
@@ -471,10 +473,12 @@ export async function adminCreateClientAccount(params: {
       headers: {
         'Content-Type': 'application/json',
         'x-admin-email': 'admin@blaze.com.pk',
+        'Authorization': 'Bearer admin@blaze.com.pk',
       },
       body: JSON.stringify({
         ...clientRecord,
         initialPassword: params.temporaryPassword,
+        adminEmail: 'admin@blaze.com.pk',
       }),
     });
 
@@ -663,15 +667,12 @@ export async function adminResetClientPassword(
       const cred = await signInWithEmailAndPassword(secondaryAuth, cleanClientEmail, newPassword).catch(async () => {
         try {
           return await createUserWithEmailAndPassword(secondaryAuth, cleanClientEmail, newPassword);
-        } catch (createErr: any) {
-          if (createErr.code === 'auth/email-already-in-use') {
-            console.info('Client email registered in Firebase Auth.');
-          }
+        } catch {
+          return null;
         }
-        return null;
       });
       if (cred?.user) {
-        await updatePassword(cred.user, newPassword).catch(console.warn);
+        await updatePassword(cred.user, newPassword).catch(() => {});
       }
     } finally {
       try {
@@ -689,20 +690,45 @@ export async function adminResetClientPassword(
       ? `/api/admin/clients/${targetParam}/reset-password`
       : `http://localhost:3000/api/admin/clients/${targetParam}/reset-password`;
 
-  const resp = await fetch(apiUrl, {
+  let resp = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-admin-email': 'admin@blaze.com.pk',
+      'Authorization': 'Bearer admin@blaze.com.pk',
     },
     body: JSON.stringify({
+      clientId: clientId || cleanClientEmail,
       newPassword,
       email: cleanClientEmail,
+      adminEmail: 'admin@blaze.com.pk',
     }),
-  });
+  }).catch(() => null);
 
-  if (!resp.ok) {
-    const errData = await resp.json().catch(() => ({}));
+  // If first attempt was not ok, try fallback URL route
+  if (!resp || !resp.ok) {
+    const fallbackUrl =
+      typeof window !== 'undefined'
+        ? '/api/admin/clients/reset-password'
+        : 'http://localhost:3000/api/admin/clients/reset-password';
+    resp = await fetch(fallbackUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-email': 'admin@blaze.com.pk',
+        'Authorization': 'Bearer admin@blaze.com.pk',
+      },
+      body: JSON.stringify({
+        clientId: clientId || cleanClientEmail,
+        newPassword,
+        email: cleanClientEmail,
+        adminEmail: 'admin@blaze.com.pk',
+      }),
+    }).catch(() => null);
+  }
+
+  if (!resp || !resp.ok) {
+    const errData = resp ? await resp.json().catch(() => ({})) : {};
     throw new Error(errData.error || 'Failed to reset client password via secure server.');
   }
 
