@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import * as XLSX from 'xlsx';
 import { initializeApp, getApps } from 'firebase/app';
@@ -387,6 +388,24 @@ function saveClientStore() {
   }
 }
 
+// Secure PBKDF2 Password Hashing & Verification
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, combinedHash?: string): boolean {
+  if (!combinedHash) return false;
+  if (!combinedHash.includes(':')) {
+    return password === combinedHash;
+  }
+  const [salt, originalHash] = combinedHash.split(':');
+  if (!salt || !originalHash) return false;
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return hash === originalHash;
+}
+
 // Background synchronization of managed clients from Firestore /users
 async function syncClientsFromFirestore() {
   try {
@@ -405,10 +424,7 @@ async function syncClientsFromFirestore() {
             designation: data.designation || 'Media Planning Executive',
             role: 'client' as const,
             status: data.status || 'Active',
-            requiresPasswordChange: data.requiresPasswordChange === true,
-            temporaryPassword: data.temporaryPassword || data.password || '',
-            password: data.password || data.temporaryPassword || '',
-            permittedCities: Array.isArray(data.permittedCities) ? data.permittedCities : [],
+            permittedCities: [],
             createdAt: data.createdAt || new Date().toISOString(),
             createdBy: data.createdBy || 'admin@blaze.com.pk',
           };
@@ -416,8 +432,7 @@ async function syncClientsFromFirestore() {
             managedClientStore[existingIdx] = {
               ...managedClientStore[existingIdx],
               ...record,
-              temporaryPassword: record.temporaryPassword || managedClientStore[existingIdx].temporaryPassword,
-              password: record.password || managedClientStore[existingIdx].password,
+              passwordHash: managedClientStore[existingIdx].passwordHash,
             };
           } else {
             managedClientStore.push(record);
@@ -440,12 +455,17 @@ function verifyAdminAuthorization(req: Request): boolean {
   return adminEmail === 'admin@blaze.com.pk' || authHeader.includes('admin@blaze.com.pk');
 }
 
-// Admin: List all provisioned clients
+// Admin: List all provisioned clients - passwords and hashes are strictly stripped
 app.get('/api/admin/clients', (req: Request, res: Response) => {
   if (!verifyAdminAuthorization(req)) {
     return res.status(403).json({ error: 'Access denied: Administrator privileges required (admin@blaze.com.pk only).' });
   }
-  res.json({ clients: managedClientStore });
+  const safeClients = managedClientStore.map(({ passwordHash, password, temporaryPassword, ...safe }) => ({
+    ...safe,
+    permittedCities: [],
+    status: safe.status || 'Active',
+  }));
+  res.json({ clients: safeClients });
 });
 
 // Admin: Create / Provision new client account
@@ -460,10 +480,9 @@ app.post('/api/admin/clients', (req: Request, res: Response) => {
     email,
     organization,
     designation,
-    permittedCities,
-    requiresPasswordChange,
     temporaryPassword,
     password,
+    initialPassword,
   } = req.body;
 
   if (!email || !name) {
@@ -471,63 +490,119 @@ app.post('/api/admin/clients', (req: Request, res: Response) => {
   }
 
   const cleanEmail = email.toLowerCase().trim();
-  const assignedPassword = temporaryPassword || password || '';
+  const rawPassword = initialPassword || temporaryPassword || password || '';
+  const passwordHash = rawPassword ? hashPassword(rawPassword) : undefined;
 
   // Check if client already exists - update if found
   const existingIndex = managedClientStore.findIndex(c => c.email === cleanEmail);
   if (existingIndex >= 0) {
+    const existing = managedClientStore[existingIndex];
     managedClientStore[existingIndex] = {
-      ...managedClientStore[existingIndex],
+      ...existing,
       name: name.trim(),
-      organization: organization?.trim() || managedClientStore[existingIndex].organization,
-      designation: designation?.trim() || managedClientStore[existingIndex].designation,
-      permittedCities: Array.isArray(permittedCities) ? permittedCities : managedClientStore[existingIndex].permittedCities,
-      requiresPasswordChange: requiresPasswordChange !== false,
-      ...(assignedPassword ? { temporaryPassword: assignedPassword, password: assignedPassword } : {}),
+      organization: organization?.trim() || existing.organization,
+      designation: designation?.trim() || existing.designation,
+      permittedCities: [],
+      ...(passwordHash ? { passwordHash } : {}),
       updatedAt: new Date().toISOString(),
     };
+    delete managedClientStore[existingIndex].password;
+    delete managedClientStore[existingIndex].temporaryPassword;
+    delete managedClientStore[existingIndex].requiresPasswordChange;
     saveClientStore();
 
-    // Sync to Firestore
+    // Sync non-sensitive profile data to Firestore
     try {
-      setDoc(doc(serverDb, 'users', managedClientStore[existingIndex].id), sanitizeForFirestore(managedClientStore[existingIndex]), { merge: true }).catch(console.warn);
+      const { passwordHash: _, password: __, temporaryPassword: ___, ...safeFirestoreDoc } = managedClientStore[existingIndex];
+      setDoc(doc(serverDb, 'users', existing.id), sanitizeForFirestore(safeFirestoreDoc), { merge: true }).catch(console.warn);
     } catch {}
 
+    const { passwordHash: _, ...safeClient } = managedClientStore[existingIndex];
     return res.status(200).json({
       success: true,
-      client: managedClientStore[existingIndex],
+      client: safeClient,
       message: `Client account updated for ${name} (${cleanEmail}).`,
     });
   }
 
+  const newClientId = id || `usr_client_${Date.now().toString().slice(-6)}`;
   const newClient = {
-    id: id || `usr_client_${Date.now().toString().slice(-6)}`,
+    id: newClientId,
     name: name.trim(),
     email: cleanEmail,
     organization: organization?.trim() || 'Advertiser Agency Client',
     designation: designation?.trim() || 'Media Planning Executive',
-    role: 'client' as const, // Strictly enforced server-side
+    role: 'client' as const,
     status: 'Active',
-    requiresPasswordChange: requiresPasswordChange !== false,
-    temporaryPassword: assignedPassword,
-    password: assignedPassword,
-    permittedCities: Array.isArray(permittedCities) ? permittedCities : [],
+    permittedCities: [],
     createdAt: new Date().toISOString(),
     createdBy: 'admin@blaze.com.pk',
+    ...(passwordHash ? { passwordHash } : {}),
   };
 
   managedClientStore.unshift(newClient);
   saveClientStore();
 
-  // Save to Firestore
+  // Save ONLY safe profile fields to Firestore - NEVER store passwords in Firestore
   try {
-    setDoc(doc(serverDb, 'users', newClient.id), sanitizeForFirestore(newClient), { merge: true }).catch(console.warn);
+    const { passwordHash: _, ...safeFirestoreDoc } = newClient;
+    setDoc(doc(serverDb, 'users', newClientId), sanitizeForFirestore(safeFirestoreDoc), { merge: true }).catch(console.warn);
   } catch {}
 
+  const { passwordHash: _, ...safeClient } = newClient;
   res.status(201).json({
     success: true,
-    client: newClient,
+    client: safeClient,
     message: `Client account provisioned for ${newClient.name} (${newClient.email}).`,
+  });
+});
+
+// Admin: Reset client password securely via protected backend (Administrator only)
+app.post('/api/admin/clients/:id/reset-password', async (req: Request, res: Response) => {
+  if (!verifyAdminAuthorization(req)) {
+    return res.status(403).json({ error: 'Access denied: Administrator privileges required (admin@blaze.com.pk only).' });
+  }
+
+  const clientId = decodeURIComponent(req.params.id);
+  const { newPassword, email } = req.body;
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+  }
+
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const clientIdx = managedClientStore.findIndex(
+    (c) => c.id === clientId || (cleanEmail && c.email?.toLowerCase().trim() === cleanEmail)
+  );
+
+  if (clientIdx < 0) {
+    return res.status(404).json({ error: 'Client account not found.' });
+  }
+
+  const targetClient = managedClientStore[clientIdx];
+  const secureHash = hashPassword(newPassword);
+
+  targetClient.passwordHash = secureHash;
+  targetClient.updatedAt = new Date().toISOString();
+  delete targetClient.password;
+  delete targetClient.temporaryPassword;
+  delete targetClient.requiresPasswordChange;
+  saveClientStore();
+
+  // Update timestamp in Firestore without storing any password
+  try {
+    await setDoc(
+      doc(serverDb, 'users', targetClient.id),
+      { updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+  } catch (err: any) {
+    console.warn('Notice updating timestamp in Firestore on reset password:', err.message);
+  }
+
+  res.json({
+    success: true,
+    message: `Password has been reset securely for ${targetClient.name} (${targetClient.email}).`,
   });
 });
 
@@ -596,7 +671,7 @@ const AUTH_ACCOUNTS = {
 
 // Login Endpoint
 // Zero-trust Security: Only admin@blaze.com.pk can receive Administrator privileges.
-// All other users (even if requested role is administrator) receive the Client role.
+// All other users receive the Client role.
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const cleanEmail = (email || '').toLowerCase().trim();
@@ -613,68 +688,16 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     });
   }
 
-  // Always query Firestore to ensure freshest user credentials from database
-  try {
-    const q = query(collection(serverDb, 'users'), where('email', '==', cleanEmail));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      const docSnap = snap.docs[0];
-      const data = docSnap.data() as any;
-      const firestoreClient = {
-        id: docSnap.id,
-        name: data.name || cleanEmail.split('@')[0],
-        email: cleanEmail,
-        organization: data.organization || 'Advertiser Agency Client',
-        designation: data.designation || 'Media Planning Executive',
-        role: 'client' as const,
-        status: data.status || 'Active',
-        requiresPasswordChange: data.requiresPasswordChange === true,
-        temporaryPassword: data.temporaryPassword || data.password || '',
-        password: data.password || data.temporaryPassword || '',
-        permittedCities: Array.isArray(data.permittedCities) ? data.permittedCities : [],
-        createdAt: data.createdAt || new Date().toISOString(),
-        createdBy: data.createdBy || 'admin@blaze.com.pk',
-      };
-      const idx = managedClientStore.findIndex((c) => c.email?.toLowerCase().trim() === cleanEmail);
-      if (idx >= 0) {
-        managedClientStore[idx] = {
-          ...managedClientStore[idx],
-          ...firestoreClient,
-          temporaryPassword: firestoreClient.temporaryPassword || managedClientStore[idx].temporaryPassword,
-          password: firestoreClient.password || managedClientStore[idx].password,
-        };
-      } else {
-        managedClientStore.push(firestoreClient);
-      }
-      saveClientStore();
-    }
-  } catch (e: any) {
-    console.warn('Notice checking Firestore in login route:', e.message);
-  }
-
   // Find client in provisioned store
   const foundClient = managedClientStore.find(c => c.email?.toLowerCase().trim() === cleanEmail);
 
   if (foundClient) {
-    const expectedPassword = foundClient.password || foundClient.temporaryPassword;
-    const isPasswordValid =
-      (foundClient.password && password === foundClient.password) ||
-      (foundClient.temporaryPassword && password === foundClient.temporaryPassword);
+    const isPasswordValid = verifyPassword(password, foundClient.passwordHash);
 
-    if (expectedPassword) {
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          error: 'Invalid password. Please enter the temporary password provided by your administrator.',
-        });
-      }
-    } else {
-      // First login for legacy client created without a password stored
-      foundClient.password = password;
-      foundClient.temporaryPassword = password;
-      saveClientStore();
-      try {
-        setDoc(doc(serverDb, 'users', foundClient.id), { password, temporaryPassword: password }, { merge: true }).catch(console.warn);
-      } catch {}
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        error: 'Invalid password. Please enter the password issued by your administrator.',
+      });
     }
 
     const clientUser = {
@@ -685,8 +708,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       organization: foundClient.organization,
       designation: foundClient.designation,
       permissions: AUTH_ACCOUNTS.clientPermissions,
-      requiresPasswordChange: foundClient.requiresPasswordChange === true,
-      permittedCities: foundClient.permittedCities || [],
+      permittedCities: [],
       status: foundClient.status || 'Active',
     };
 
@@ -702,45 +724,11 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   });
 });
 
-// Update client password endpoint
-app.post('/api/auth/update-password', async (req: Request, res: Response) => {
-  const { email, newPassword } = req.body;
-  const cleanEmail = (email || '').toLowerCase().trim();
-  const idx = managedClientStore.findIndex(c => c.email?.toLowerCase().trim() === cleanEmail);
-  if (idx >= 0) {
-    managedClientStore[idx].password = newPassword;
-    managedClientStore[idx].temporaryPassword = newPassword;
-    managedClientStore[idx].requiresPasswordChange = false;
-    managedClientStore[idx].updatedAt = new Date().toISOString();
-    saveClientStore();
-
-    try {
-      setDoc(
-        doc(serverDb, 'users', managedClientStore[idx].id),
-        { password: newPassword, temporaryPassword: newPassword, requiresPasswordChange: false },
-        { merge: true }
-      ).catch(console.warn);
-    } catch {}
-
-    return res.json({ success: true, message: 'Password updated successfully in server store.' });
-  }
-
-  // Also try Firestore directly if not yet in server array
-  try {
-    const q = query(collection(serverDb, 'users'), where('email', '==', cleanEmail));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      const docSnap = snap.docs[0];
-      await setDoc(
-        docSnap.ref,
-        { password: newPassword, temporaryPassword: newPassword, requiresPasswordChange: false },
-        { merge: true }
-      );
-      return res.json({ success: true, message: 'Password updated successfully in database.' });
-    }
-  } catch {}
-
-  res.status(404).json({ error: 'Client account not found.' });
+// Update client password endpoint - Disabled for clients (Admin-controlled passwords only)
+app.post('/api/auth/update-password', async (_req: Request, res: Response) => {
+  return res.status(403).json({
+    error: 'Client password modification is restricted. Only the administrator can reset or change client credentials.',
+  });
 });
 
 // Fetch client profile by email or id
@@ -753,8 +741,8 @@ app.get('/api/auth/client-profile', (req: Request, res: Response) => {
       (id && c.id === id)
   );
   if (found) {
-    const { password, temporaryPassword, ...safeProfile } = found;
-    return res.json({ success: true, client: safeProfile });
+    const { password, temporaryPassword, passwordHash, ...safeProfile } = found;
+    return res.json({ success: true, client: { ...safeProfile, permittedCities: [] } });
   }
   res.status(404).json({ error: 'Client profile not found.' });
 });

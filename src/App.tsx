@@ -38,7 +38,6 @@ import { BookingRequestModal } from './components/modals/BookingRequestModal';
 import { PakistanCitiesModal } from './components/modals/PakistanCitiesModal';
 import { ManageClientsModal } from './components/modals/ManageClientsModal';
 import { ManageVendorsModal } from './components/modals/ManageVendorsModal';
-import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { StartingLoginWindow } from './components/modals/StartingLoginWindow';
 import { DeleteAssetConfirmationModal } from './components/modals/DeleteAssetConfirmationModal';
 import { CheckCircle2, AlertCircle, Info, ShieldCheck, User } from 'lucide-react';
@@ -153,7 +152,6 @@ export default function App() {
   >('client');
   const [isBookingsModalOpen, setIsBookingsModalOpen] = useState<boolean>(false);
   const [isManageClientsOpen, setIsManageClientsOpen] = useState<boolean>(false);
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
 
   const openLoginModal = (
     mode: 'client' | 'administrator' | 'signin' | 'register' = 'client'
@@ -277,10 +275,6 @@ export default function App() {
         try {
           localStorage.setItem('blaze_ooh_authenticated', 'true');
         } catch {}
-
-        if (account.requiresPasswordChange) {
-          setIsChangePasswordOpen(true);
-        }
       }
     });
     return () => unsubscribe();
@@ -716,11 +710,6 @@ export default function App() {
     } catch {}
 
     showToast(`Successfully authenticated as ${user.name} (${user.role.toUpperCase()})`);
-
-    // If client requires permanent password change on first login, prompt modal immediately
-    if (user.requiresPasswordChange) {
-      setIsChangePasswordOpen(true);
-    }
   };
 
   const handleSignOut = async () => {
@@ -1277,18 +1266,6 @@ export default function App() {
         />
       )}
 
-      {/* Client Temporary Password Update Modal on First Login */}
-      {isChangePasswordOpen && (
-        <ChangePasswordModal
-          currentUser={currentUser}
-          onPasswordChanged={(updatedUser) => {
-            setCurrentUser(updatedUser);
-            setIsChangePasswordOpen(false);
-            showToast('Permanent password saved successfully. Welcome to Blaze OOH!');
-          }}
-          onClose={() => setIsChangePasswordOpen(false)}
-        />
-      )}
 
       {isBookingsModalOpen && (
         <BookingsModal

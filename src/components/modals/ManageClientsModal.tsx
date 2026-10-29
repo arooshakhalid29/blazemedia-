@@ -21,6 +21,7 @@ import {
   Sparkles,
   Eye,
   EyeOff,
+  Globe,
 } from 'lucide-react';
 import { ManagedClientRecord, UserAccount } from '../../types/mediaAsset';
 import {
@@ -28,6 +29,7 @@ import {
   fetchManagedClients,
   subscribeToManagedClients,
   adminDeleteClient,
+  adminResetClientPassword,
 } from '../../services/firebase';
 
 interface ManageClientsModalProps {
@@ -35,19 +37,6 @@ interface ManageClientsModalProps {
   onClose: () => void;
   onClientsUpdated?: (clients: ManagedClientRecord[]) => void;
 }
-
-const COMMON_CITIES = [
-  'Karachi',
-  'Lahore',
-  'Islamabad',
-  'Rawalpindi',
-  'Faisalabad',
-  'Multan',
-  'Peshawar',
-  'Quetta',
-  'Sialkot',
-  'Gujranwala',
-];
 
 export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
   currentUser,
@@ -68,12 +57,6 @@ export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
   const [clientDesignation, setClientDesignation] = useState<string>('');
   const [temporaryPassword, setTemporaryPassword] = useState<string>('');
   const [showTempPassword, setShowTempPassword] = useState<boolean>(false);
-  const [requirePasswordChange, setRequirePasswordChange] = useState<boolean>(true);
-  const [selectedCities, setSelectedCities] = useState<string[]>([
-    'Karachi',
-    'Lahore',
-    'Islamabad',
-  ]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [createdClientSummary, setCreatedClientSummary] = useState<{
     record: ManagedClientRecord;
@@ -82,6 +65,15 @@ export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  // Admin Reset Client Password Modal State
+  const [resetPasswordClient, setResetPasswordClient] = useState<ManagedClientRecord | null>(null);
+  const [newClientPassword, setNewClientPassword] = useState<string>('');
+  const [showNewClientPassword, setShowNewClientPassword] = useState<boolean>(false);
+  const [isResettingPassword, setIsResettingPassword] = useState<boolean>(false);
+  const [resetPasswordError, setResetPasswordError] = useState<string>('');
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState<string | null>(null);
+  const [copiedResetPassword, setCopiedResetPassword] = useState<boolean>(false);
 
   const isAdmin =
     currentUser.role === 'administrator' &&
@@ -129,16 +121,16 @@ export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
     setTemporaryPassword(pwd);
   };
 
-  // Toggle city in permitted cities list
-  const toggleCity = (city: string) => {
-    if (selectedCities.includes(city)) {
-      setSelectedCities(selectedCities.filter((c) => c !== city));
-    } else {
-      setSelectedCities([...selectedCities, city]);
+  const generateResetPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+    let pwd = 'Blz!';
+    for (let i = 0; i < 8; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    setNewClientPassword(pwd);
   };
 
-  // Handle Client Provisioning
+  // Handle Client Provisioning with Unrestricted Nationwide City Access
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName.trim() || !clientEmail.trim()) {
@@ -161,7 +153,7 @@ export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
         organization: clientOrganization.trim() || 'Advertiser Agency Client',
         designation: clientDesignation.trim() || 'Media Planning Executive',
         temporaryPassword,
-        permittedCities: selectedCities,
+        permittedCities: [], // Unrestricted nationwide access for all clients
         adminEmail: currentUser.email || 'admin@blaze.com.pk',
       });
 
@@ -176,7 +168,7 @@ export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
         temporaryPassword,
       });
       setSuccessMsg(
-        `Client account successfully issued for ${newRecord.name} (${newRecord.email}).`
+        `Client account successfully issued for ${newRecord.name} (${newRecord.email}) with full nationwide city access.`
       );
 
       // Refresh list in background
@@ -197,6 +189,33 @@ export const ManageClientsModal: React.FC<ManageClientsModalProps> = ({
       setErrorMsg(msg);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle Admin Reset Password Submission
+  const handleAdminResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordClient) return;
+    if (!newClientPassword || newClientPassword.length < 6) {
+      setResetPasswordError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    setIsResettingPassword(true);
+    setResetPasswordError('');
+    try {
+      await adminResetClientPassword(
+        resetPasswordClient.id,
+        resetPasswordClient.email,
+        newClientPassword,
+        currentUser.email || 'admin@blaze.com.pk'
+      );
+      setResetPasswordSuccess(newClientPassword);
+      setSuccessMsg(`Password successfully reset for client ${resetPasswordClient.name}.`);
+    } catch (err: any) {
+      setResetPasswordError(err.message || 'Failed to reset client password.');
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -449,40 +468,16 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                                 </div>
                               </td>
                               <td className="py-3 px-3">
-                                <div className="text-[10px] text-slate-400">
-                                  {client.permittedCities && client.permittedCities.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1 max-w-[150px]">
-                                      {client.permittedCities.slice(0, 3).map((city) => (
-                                        <span
-                                          key={city}
-                                          className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono"
-                                        >
-                                          {city}
-                                        </span>
-                                      ))}
-                                      {client.permittedCities.length > 3 && (
-                                        <span className="text-slate-500">
-                                          +{client.permittedCities.length - 3}
-                                        </span>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-500">Nationwide (All)</span>
-                                  )}
-                                </div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-blue-950/50 text-blue-300 border border-blue-800/60">
+                                  <Globe className="w-3 h-3 text-blue-400" />
+                                  <span>All Cities (Unrestricted)</span>
+                                </span>
                               </td>
                               <td className="py-3 px-3">
-                                {client.requiresPasswordChange ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-950/50 text-amber-300 border border-amber-800/60">
-                                    <Clock className="w-3 h-3" />
-                                    <span>Temp Pwd · Change Req.</span>
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-950/50 text-emerald-300 border border-emerald-800/60">
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    <span>Active · Permanent Pwd</span>
-                                  </span>
-                                )}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-950/50 text-emerald-300 border border-emerald-800/60">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                  <span>Active Account</span>
+                                </span>
                               </td>
                               <td className="py-3 px-3 text-right">
                                 {pendingDeleteId === client.id ? (
@@ -508,14 +503,30 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                                     </button>
                                   </div>
                                 ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setPendingDeleteId(client.id)}
-                                    className="p-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-200 border border-red-800/60 rounded transition-colors cursor-pointer"
-                                    title="Revoke and delete client account"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setResetPasswordClient(client);
+                                        setNewClientPassword('');
+                                        setResetPasswordError('');
+                                        setResetPasswordSuccess(null);
+                                        setShowNewClientPassword(false);
+                                      }}
+                                      className="p-1.5 bg-amber-950/40 hover:bg-amber-900/60 text-amber-400 hover:text-amber-200 border border-amber-800/60 rounded transition-colors cursor-pointer"
+                                      title={`Reset password for ${client.name}`}
+                                    >
+                                      <KeyRound className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingDeleteId(client.id)}
+                                      className="p-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-200 border border-red-800/60 rounded transition-colors cursor-pointer"
+                                      title="Revoke and delete client account"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
@@ -560,7 +571,11 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                           <span className="text-slate-200">{createdClientSummary.record.organization}</span>
                         </div>
                         <div>
-                          <span className="text-slate-500">Temporary Password:</span>{' '}
+                          <span className="text-slate-500">Coverage:</span>{' '}
+                          <span className="text-blue-300 font-semibold">All Cities Nationwide (Unrestricted)</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Initial Password:</span>{' '}
                           <code className="text-amber-300 font-bold bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
                             {createdClientSummary.temporaryPassword}
                           </code>
@@ -568,9 +583,8 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                       </div>
 
                       <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-                        ✓ Securely provisioned in Firebase Authentication. Share these credentials with the client.
-                        Upon first login, they will be required to change this temporary password before accessing the
-                        database.
+                        ✓ Securely provisioned in Firebase Authentication and protected backend. Share these credentials with the client.
+                        Passwords are encrypted via PBKDF2 and never stored in Firestore or plaintext.
                       </p>
                     </div>
                   )}
@@ -580,9 +594,8 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                       <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                       <div>
                         <strong className="text-blue-200 block">Administrator Credential Issuance:</strong>
-                        Client accounts cannot be registered by the public. When you provision an account here, Firebase
-                        Authentication generates the credentials and restricts their permissions strictly to Client
-                        status.
+                        Client accounts cannot be registered by the public. When you provision an account here, credentials
+                        are generated securely without storing plaintext passwords in Firestore.
                       </div>
                     </div>
 
@@ -649,7 +662,7 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
                           <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Initial Temporary Password *</span>
+                          <span>Initial Client Password *</span>
                         </label>
                         <button
                           type="button"
@@ -667,7 +680,7 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                           required
                           value={temporaryPassword}
                           onChange={(e) => setTemporaryPassword(e.target.value)}
-                          placeholder="Enter temporary password"
+                          placeholder="Enter initial client password"
                           className="w-full bg-slate-950 border border-slate-700 font-mono rounded-lg pl-3 pr-9 py-2 text-xs text-amber-300 placeholder-slate-500 focus:outline-hidden focus:border-amber-500"
                         />
                         <button
@@ -684,48 +697,15 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                       </span>
                     </div>
 
-                    {/* Password change requirement toggle */}
-                    <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-lg flex items-center justify-between">
+                    {/* Unrestricted Nationwide Market Coverage Notice */}
+                    <div className="p-3 bg-blue-950/30 border border-blue-900/60 rounded-lg text-xs text-blue-300 flex items-start gap-2.5">
+                      <Globe className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-semibold text-slate-200 block text-xs">
-                          Require password change on first login
+                        <span className="font-semibold text-blue-200 block">Unrestricted Nationwide City Access:</span>
+                        <span className="text-[11px] text-blue-300/90 leading-relaxed block">
+                          This client will have complete authorization to browse, evaluate, and reserve media assets
+                          across all cities in Pakistan (Karachi, Lahore, Islamabad, Rawalpindi, Peshawar, Quetta, Multan, Faisalabad, Gujranwala, Sialkot, and regional corridors).
                         </span>
-                        <span className="text-[10px] text-slate-400">
-                          Forces the client to set their private permanent password upon authenticating.
-                        </span>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={requirePasswordChange}
-                        onChange={(e) => setRequirePasswordChange(e.target.checked)}
-                        className="w-4 h-4 accent-amber-500 cursor-pointer"
-                      />
-                    </div>
-
-                    {/* Permitted Regional Cities */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Permitted Market Coverage (Selected: {selectedCities.length})</span>
-                      </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {COMMON_CITIES.map((city) => {
-                          const isSelected = selectedCities.includes(city);
-                          return (
-                            <button
-                              key={city}
-                              type="button"
-                              onClick={() => toggleCity(city)}
-                              className={`px-2.5 py-1 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
-                                isSelected
-                                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 font-semibold'
-                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'
-                              }`}
-                            >
-                              {city} {isSelected && '✓'}
-                            </button>
-                          );
-                        })}
                       </div>
                     </div>
 
@@ -744,6 +724,140 @@ Temporary Password: ${createdClientSummary.temporaryPassword}
                 </div>
               )}
             </div>
+
+            {/* Admin Reset Client Password Sub-Modal */}
+            {resetPasswordClient && (
+              <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-amber-500/50 rounded-xl shadow-2xl w-full max-w-md overflow-hidden text-xs text-slate-200 animate-in fade-in zoom-in-95">
+                  <div className="px-5 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-amber-400" />
+                      <h3 className="font-bold text-sm text-slate-100">Reset Client Password</h3>
+                    </div>
+                    <button
+                      onClick={() => setResetPasswordClient(null)}
+                      className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    <div className="p-3 bg-slate-950/80 rounded-lg border border-slate-800 space-y-1">
+                      <div className="text-slate-400 text-[11px]">Client Profile:</div>
+                      <div className="font-bold text-slate-100 text-sm">{resetPasswordClient.name}</div>
+                      <div className="font-mono text-blue-300 text-[11px]">{resetPasswordClient.email}</div>
+                      <div className="text-slate-400 text-[11px]">{resetPasswordClient.organization}</div>
+                    </div>
+
+                    <div className="p-3 bg-amber-950/30 border border-amber-900/50 rounded-lg text-[11px] text-amber-300 flex items-start gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="text-amber-200 block">Administrator Credential Control:</strong>
+                        Existing passwords are never stored in plaintext or displayed. As the administrator, enter or generate a new password below.
+                      </div>
+                    </div>
+
+                    {resetPasswordSuccess ? (
+                      <div className="p-4 bg-emerald-950/40 border border-emerald-600/80 rounded-xl space-y-3">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Password Reset Successfully!</span>
+                        </div>
+                        <div className="p-3 bg-slate-950 rounded border border-slate-800 font-mono flex items-center justify-between">
+                          <div>
+                            <div className="text-[10px] text-slate-500">Newly Set Password:</div>
+                            <div className="text-amber-300 font-bold text-sm">{resetPasswordSuccess}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(resetPasswordSuccess);
+                              setCopiedResetPassword(true);
+                              setTimeout(() => setCopiedResetPassword(false), 2000);
+                            }}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold text-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedResetPassword ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedResetPassword ? 'Copied' : 'Copy'}</span>
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          Provide this new password to the client. Their credentials have been updated securely in the backend.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setResetPasswordClient(null)}
+                          className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded font-semibold text-xs cursor-pointer"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleAdminResetPassword} className="space-y-3">
+                        {resetPasswordError && (
+                          <div className="p-2.5 bg-red-950/60 border border-red-800 text-red-300 rounded text-[11px] flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{resetPasswordError}</span>
+                          </div>
+                        )}
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-semibold text-slate-300">New Password *</label>
+                            <button
+                              type="button"
+                              onClick={generateResetPassword}
+                              className="text-[10px] text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              <span>Generate Strong Password</span>
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type={showNewClientPassword ? 'text' : 'password'}
+                              required
+                              value={newClientPassword}
+                              onChange={(e) => setNewClientPassword(e.target.value)}
+                              placeholder="Enter new client password (min 6 chars)"
+                              className="w-full bg-slate-950 border border-slate-700 font-mono rounded-lg pl-3 pr-9 py-2 text-xs text-amber-300 focus:outline-hidden focus:border-amber-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewClientPassword(!showNewClientPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                            >
+                              {showNewClientPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-slate-500 mt-1 block">
+                            Minimum 6 characters. Hidden by default.
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setResetPasswordClient(null)}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isResettingPassword || !newClientPassword.trim()}
+                            className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded text-xs font-bold cursor-pointer disabled:opacity-50"
+                          >
+                            {isResettingPassword ? 'Resetting Password...' : 'Save New Password'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between">

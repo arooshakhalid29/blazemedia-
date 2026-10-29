@@ -278,7 +278,6 @@ export interface UserAccount {
   organization: string;
   designation: string;
   permissions: UserPermissions;
-  requiresPasswordChange?: boolean;
   permittedCities?: string[];
   status?: 'Active' | 'Suspended';
   createdAt?: string;
@@ -293,9 +292,7 @@ export interface ManagedClientRecord {
   designation: string;
   role: 'client';
   status: 'Active' | 'Suspended';
-  requiresPasswordChange: boolean;
-  temporaryPassword?: string;
-  password?: string;
+  requiresPasswordChange?: boolean;
   permittedCities?: string[];
   createdAt: string;
   createdBy: string;

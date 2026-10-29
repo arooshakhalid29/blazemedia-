@@ -7,42 +7,23 @@
     "designation": "Media Planning Executive",
     "role": "client",
     "status": "Active",
-    "requiresPasswordChange": false,
-    "temporaryPassword": "Aks1212#",
-    "password": "Aks1212#",
-    "permittedCities": [
-      "Karachi",
-      "Lahore",
-      "Islamabad",
-      "Rawalpindi",
-      "Faisalabad",
-      "Multan",
-      "Quetta",
-      "Peshawar",
-      "Gujranwala",
-      "Sialkot"
-    ],
+    "permittedCities": [],
     "createdAt": "2026-10-28T08:45:37.916Z",
-    "createdBy": "admin@blaze.com.pk"
+    "createdBy": "admin@blaze.com.pk",
+    "passwordHash": "7e6e0b278909dd6cf1b8ffae661de8ee:2702907343c61e9ff92b7e0ab292e7c10fa307eeb8944bcf818e6da8de3728ab15693497dce16abd2622ec1a077de8f742156373bbabc9b9a2f9b4f3ba569de1"
   },
   {
-    "id": "usr_client_103901",
+    "id": "usr_client_654930",
     "name": "Danish Ali",
     "email": "daneshali1039@gmail.com",
-    "organization": "Freelance Media Planner",
-    "designation": "Media Planning Director",
+    "organization": "Freelance",
+    "designation": "Media Planning Executive",
     "role": "client",
     "status": "Active",
-    "requiresPasswordChange": false,
-    "temporaryPassword": "Blz!Danish2026",
-    "password": "Blz!Danish2026",
-    "permittedCities": [
-      "Karachi",
-      "Lahore",
-      "Islamabad"
-    ],
-    "createdAt": "2026-10-21T07:15:00.000Z",
-    "createdBy": "admin@blaze.com.pk"
+    "permittedCities": [],
+    "createdAt": "2026-10-28T18:20:55.752Z",
+    "createdBy": "admin@blaze.com.pk",
+    "passwordHash": "ec2b8c8803dd352fe206362c31557aef:1a3b1571d2ac82d943b3a64aaf590e7a81812bbd6f626e6571a5d65d57b4e13723bab9c728c40641eb27e4ed2ab07fad52581e1accc1525b8487dab1ccf3214e"
   },
   {
     "id": "usr_client_847216",
@@ -52,15 +33,10 @@
     "designation": "Head of Planning",
     "role": "client",
     "status": "Active",
-    "requiresPasswordChange": false,
-    "temporaryPassword": "Starcom2026!Secure",
-    "password": "Starcom2026!Secure",
-    "permittedCities": [
-      "Karachi",
-      "Lahore"
-    ],
+    "permittedCities": [],
     "createdAt": "2026-10-21T07:30:47.216Z",
-    "createdBy": "admin@blaze.com.pk"
+    "createdBy": "admin@blaze.com.pk",
+    "passwordHash": "26c014ac90ce3a686b01e10ba08c1592:e61e6a448607f126723f79c4b51acfd066ae02b47eb5ff26c37e54fdcb0e185269d26fc65543229349a7be2c08ade03e6de88619524f7cf8b6662da28b3127cf"
   },
   {
     "id": "usr_client_936451",
@@ -70,15 +46,59 @@
     "designation": "Senior Media Planner",
     "role": "client",
     "status": "Active",
-    "requiresPasswordChange": false,
-    "temporaryPassword": "Mindshare2026!",
-    "password": "Mindshare2026!",
-    "permittedCities": [
-      "Karachi",
-      "Lahore",
-      "Islamabad"
-    ],
+    "permittedCities": [],
     "createdAt": "2026-10-21T07:45:00.000Z",
+    "createdBy": "admin@blaze.com.pk",
+    "passwordHash": "d2de47018ef05ed2481e190573f01813:a2da71d1ea0f6fa1f6be7a17e12d53d114f2c6eca3b6041cee2f8ba3f8797a92b227eb41294536d7125a8fa91e49d8b802b16cd9b2eb41d1b107fbc05fdbd580"
+  },
+  {
+    "id": "usr_client_002771",
+    "name": "danish",
+    "email": "danishali1039@gmail.com",
+    "organization": "Advertiser Agency Client",
+    "designation": "Media Planning Executive",
+    "role": "client",
+    "status": "Active",
+    "permittedCities": [],
+    "createdAt": "2026-10-29T07:30:03.460Z",
+    "createdBy": "admin@blaze.com.pk",
+    "passwordHash": "3fbfaebe37946a6f91ac5aae026250d3:3fa9faa421c0a2bdc57b91e40bbd615dd5359af0d92abe260471d8ad409b76fb5d81070c3971f26bbd3b47c108f29d2cfb9176e85ce152cd122223dcfbe39b57"
+  },
+  {
+    "id": "usr_client_542735",
+    "name": "ali",
+    "email": "ali789@gmail.com",
+    "organization": "Advertiser Agency Client",
+    "designation": "Media Planning Executive",
+    "role": "client",
+    "status": "Active",
+    "permittedCities": [],
+    "createdAt": "2026-10-29T07:05:43.616Z",
+    "createdBy": "admin@blaze.com.pk",
+    "passwordHash": "5ac8e7f83090a2a4bcd09aa998e9ae45:df1569600413978d646b2bd2496b0c973be2f166a9bff365dedffe0bbd3636cbf0ea0521bdedecb1474640a12159244d4e93e345e98b92ba320ed56d2becdb35"
+  },
+  {
+    "id": "usr_client_730336",
+    "name": "Aroosha Wateel",
+    "email": "waroosh3@gmail.com",
+    "organization": "Advertiser Agency Client",
+    "designation": "Media Planning Executive",
+    "role": "client",
+    "status": "Active",
+    "permittedCities": [],
+    "createdAt": "2026-10-29T07:08:50.952Z",
+    "createdBy": "admin@blaze.com.pk"
+  },
+  {
+    "id": "usr_client_730337",
+    "name": "Aroosha Wateel",
+    "email": "waroos3@gmail.com",
+    "organization": "Advertiser Agency Client",
+    "designation": "Media Planning Executive",
+    "role": "client",
+    "status": "Active",
+    "permittedCities": [],
+    "createdAt": "2026-10-29T07:08:50.952Z",
     "createdBy": "admin@blaze.com.pk"
   }
 ]
